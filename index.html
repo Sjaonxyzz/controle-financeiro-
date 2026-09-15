@@ -209,6 +209,14 @@
     padding:8px 10px;
     border-radius:var(--radius);
   }
+  .date-filter-label{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .date-filter-label input{padding:7px 8px;}
 
   /* ---------- ledger table ---------- */
   table{
@@ -414,6 +422,13 @@
         <select id="filterMonth">
           <option value="all">Todos os meses</option>
         </select>
+        <label class="date-filter-label" for="filterDateFrom">De
+          <input type="date" id="filterDateFrom">
+        </label>
+        <label class="date-filter-label" for="filterDateTo">Até
+          <input type="date" id="filterDateTo">
+        </label>
+        <button type="button" class="btn btn-ghost" id="clearFiltersBtn">Limpar filtros</button>
       </div>
     </div>
 
@@ -704,9 +719,21 @@
   var filterType = $("filterType");
   var filterCategory = $("filterCategory");
   var filterMonth = $("filterMonth");
-  [filterSearch, filterType, filterCategory, filterMonth].forEach(function(el){
+  var filterDateFrom = $("filterDateFrom");
+  var filterDateTo = $("filterDateTo");
+  [filterSearch, filterType, filterCategory, filterMonth, filterDateFrom, filterDateTo].forEach(function(el){
     el.addEventListener("input", renderLedger);
     el.addEventListener("change", renderLedger);
+  });
+
+  $("clearFiltersBtn").addEventListener("click", function(){
+    filterSearch.value = "";
+    filterType.value = "all";
+    filterCategory.value = "all";
+    filterMonth.value = "all";
+    filterDateFrom.value = "";
+    filterDateTo.value = "";
+    renderLedger();
   });
 
   function refreshFilterOptions(){
@@ -791,11 +818,15 @@
     var type = filterType.value;
     var cat = filterCategory.value;
     var month = filterMonth.value;
+    var dateFrom = filterDateFrom.value;
+    var dateTo = filterDateTo.value;
 
     var rows = transactions.filter(function(t){
       if(type !== "all" && t.type !== type) return false;
       if(cat !== "all" && t.category !== cat) return false;
       if(month !== "all" && t.date.slice(0,7) !== month) return false;
+      if(dateFrom && t.date < dateFrom) return false;
+      if(dateTo && t.date > dateTo) return false;
       if(search && t.description.toLowerCase().indexOf(search) === -1) return false;
       return true;
     }).sort(function(a,b){ return b.date.localeCompare(a.date); });
