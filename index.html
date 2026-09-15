@@ -479,6 +479,14 @@
       </div>
     </div>
 
+    <div class="breakdown">
+      <h2>Entradas por categoria</h2>
+      <div class="donut-wrap">
+        <div class="donut" id="incomeDonut"></div>
+        <div class="legend" id="incomeList"></div>
+      </div>
+    </div>
+
     <div class="data-actions">
       <button class="btn btn-ghost" id="exportBtn">↓ Exportar backup (.json)</button>
       <button class="btn btn-ghost" id="importBtn">↑ Importar backup (.json)</button>
@@ -631,6 +639,7 @@
   var fmtCompact = new Intl.NumberFormat("pt-BR", {style:"currency", currency:"BRL", notation:"compact", maximumFractionDigits:1});
   var dateFmt = new Intl.DateTimeFormat("pt-BR", {day:"2-digit", month:"2-digit", year:"numeric", timeZone:"UTC"});
   var donutPalette = ["#c06a4d", "#d9a544", "#87a17c", "#6b8ea8", "#a88bc9", "#c9738f", "#7fae9c", "#b98f5e"];
+  var incomePalette = ["#87a17c", "#6b8ea8", "#d9a544", "#7fae9c", "#a88bc9", "#c9738f", "#b98f5e", "#c06a4d"];
 
   function todayISO(){
     var d = new Date();
@@ -873,28 +882,34 @@
     $("totalIn").textContent = fmt.format(totalIn);
     $("totalOut").textContent = fmt.format(totalOut);
 
+    renderCategoryDonut("out", "breakdownDonut", "breakdownList", "saídas");
+    renderCategoryDonut("in", "incomeDonut", "incomeList", "entradas");
+  }
+
+  function renderCategoryDonut(type, donutId, listId, label){
     var byCategory = {};
     transactions.forEach(function(t){
-      if(t.type !== "out") return;
+      if(t.type !== type) return;
       byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
     });
     var entries = Object.keys(byCategory).map(function(k){ return [k, byCategory[k]]; });
     entries.sort(function(a,b){ return b[1]-a[1]; });
-    var totalOutCat = entries.reduce(function(sum, e){ return sum + e[1]; }, 0);
+    var total = entries.reduce(function(sum, e){ return sum + e[1]; }, 0);
 
-    $("breakdownDonut").innerHTML = buildDonutSVG(entries, totalOutCat);
+    var palette = type === "in" ? incomePalette : donutPalette;
+    $(donutId).innerHTML = buildDonutSVG(entries, total, label, palette);
 
-    var list = $("breakdownList");
+    var list = $(listId);
     list.innerHTML = "";
     if(!entries.length){
-      list.innerHTML = '<p class="empty-note">Nenhuma saída registrada ainda.</p>';
+      list.innerHTML = '<p class="empty-note">Nenhuma ' + (type === "in" ? "entrada" : "saída") + ' registrada ainda.</p>';
     } else {
       entries.forEach(function(entry, i){
-        var pct = totalOutCat ? Math.round(entry[1] / totalOutCat * 100) : 0;
+        var pct = total ? Math.round(entry[1] / total * 100) : 0;
         var div = document.createElement("div");
         div.className = "legend-item";
         div.innerHTML =
-          '<span class="dot" style="background:' + donutPalette[i % donutPalette.length] + '"></span>' +
+          '<span class="dot" style="background:' + palette[i % palette.length] + '"></span>' +
           '<span class="name">' + escapeHtml(entry[0]) + '</span>' +
           '<span class="value">' + fmt.format(entry[1]) + ' · ' + pct + '%</span>';
         list.appendChild(div);
@@ -902,7 +917,8 @@
     }
   }
 
-  function buildDonutSVG(entries, total){
+  function buildDonutSVG(entries, total, label, palette){
+    palette = palette || donutPalette;
     var size = 132, r = 48, cx = 66, cy = 66, sw = 16;
     var circumference = 2 * Math.PI * r;
     var offset = 0;
@@ -913,7 +929,7 @@
         var len = frac * circumference;
         segments +=
           '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" ' +
-          'stroke="' + donutPalette[i % donutPalette.length] + '" stroke-width="' + sw + '" ' +
+          'stroke="' + palette[i % palette.length] + '" stroke-width="' + sw + '" ' +
           'stroke-dasharray="' + len.toFixed(2) + ' ' + (circumference - len).toFixed(2) + '" ' +
           'stroke-dashoffset="' + (-offset).toFixed(2) + '" ' +
           'transform="rotate(-90 ' + cx + ' ' + cy + ')"></circle>';
@@ -925,7 +941,7 @@
     var centerVal = fmtCompact.format(total);
     var centerText =
       '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" fill="#eae6da" font-family="Public Sans, sans-serif" font-size="14" font-weight="700">' + centerVal + '</text>' +
-      '<text x="' + cx + '" y="' + (cy + 15) + '" text-anchor="middle" fill="#8d96a3" font-family="Public Sans, sans-serif" font-size="9">saídas</text>';
+      '<text x="' + cx + '" y="' + (cy + 15) + '" text-anchor="middle" fill="#8d96a3" font-family="Public Sans, sans-serif" font-size="9">' + escapeHtml(label) + '</text>';
     return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + segments + centerText + '</svg>';
   }
 
