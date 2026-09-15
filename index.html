@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Livro-Caixa — controle de finanças</title>
+<title>Finanças — controle de entradas e saídas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -372,7 +372,7 @@
       <line x1="6" y1="21" x2="20" y2="21" stroke="#8d96a3" stroke-width="1.2"/>
     </svg>
     <div>
-      <h1>Livro-Caixa</h1>
+      <h1>Finanças</h1>
       <p>seus lançamentos, guardados só neste navegador</p>
     </div>
   </div>
@@ -877,7 +877,7 @@
 
   $("exportBtn").addEventListener("click", function(){
     var data = {transactions: transactions, categories: categories};
-    download("livro-caixa-backup.json", JSON.stringify(data, null, 2), "application/json");
+    download("financas-backup.json", JSON.stringify(data, null, 2), "application/json");
   });
 
   $("exportCsvBtn").addEventListener("click", function(){
@@ -887,7 +887,7 @@
       var desc = '"' + t.description.replace(/"/g,'""') + '"';
       return [t.date, tipo, desc, t.category, t.amount.toFixed(2)].join(",");
     });
-    download("livro-caixa.csv", header + rows.join("\n"), "text/csv");
+    download("financas.csv", header + rows.join("\n"), "text/csv");
   });
 
   $("importBtn").addEventListener("click", function(){ $("importFile").click(); });
