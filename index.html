@@ -170,6 +170,84 @@
     color:var(--muted);
     font-style:italic;
   }
+  .donut-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:16px;
+  }
+  .donut svg{display:block;}
+  .legend{
+    width:100%;
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+  }
+  .legend-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:12.5px;
+  }
+  .legend-item .dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    flex:none;
+  }
+  .legend-item .name{
+    flex:1;
+    color:var(--paper);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .legend-item .value{
+    color:var(--muted);
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+
+  .dashboard-section{
+    margin-bottom:32px;
+    padding-bottom:28px;
+    border-bottom:1px solid var(--line);
+  }
+  .dashboard-section h2{
+    font-family:var(--serif);
+    font-weight:500;
+    font-size:20px;
+    margin:0 0 4px;
+  }
+  .dashboard-section .sub{
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 16px;
+  }
+  .chart-legend-row{
+    display:flex;
+    gap:20px;
+    margin-bottom:14px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .chart-legend-row .key{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .chart-legend-row .swatch{
+    width:10px;
+    height:10px;
+    border-radius:2px;
+    display:inline-block;
+  }
+  .month-chart{
+    width:100%;
+    height:auto;
+    display:block;
+    overflow:visible;
+  }
 
   .data-actions{
     margin-top:28px;
@@ -395,7 +473,10 @@
 
     <div class="breakdown">
       <h2>Saídas por categoria</h2>
-      <div id="breakdownList"></div>
+      <div class="donut-wrap">
+        <div class="donut" id="breakdownDonut"></div>
+        <div class="legend" id="breakdownList"></div>
+      </div>
     </div>
 
     <div class="data-actions">
@@ -407,6 +488,16 @@
   </aside>
 
   <main>
+    <section class="dashboard-section">
+      <h2>Entradas x Saídas</h2>
+      <p class="sub">Últimos 6 meses</p>
+      <div class="chart-legend-row">
+        <span class="key"><span class="swatch" style="background:#87a17c"></span>Entradas</span>
+        <span class="key"><span class="swatch" style="background:#c06a4d"></span>Saídas</span>
+      </div>
+      <div id="monthChartWrap"></div>
+    </section>
+
     <div class="main-head">
       <h2>Lançamentos</h2>
       <div class="filters">
@@ -537,7 +628,9 @@
   var editingId = null;
 
   var fmt = new Intl.NumberFormat("pt-BR", {style:"currency", currency:"BRL"});
+  var fmtCompact = new Intl.NumberFormat("pt-BR", {style:"currency", currency:"BRL", notation:"compact", maximumFractionDigits:1});
   var dateFmt = new Intl.DateTimeFormat("pt-BR", {day:"2-digit", month:"2-digit", year:"numeric", timeZone:"UTC"});
+  var donutPalette = ["#c06a4d", "#d9a544", "#87a17c", "#6b8ea8", "#a88bc9", "#c9738f", "#7fae9c", "#b98f5e"];
 
   function todayISO(){
     var d = new Date();
@@ -787,22 +880,107 @@
     });
     var entries = Object.keys(byCategory).map(function(k){ return [k, byCategory[k]]; });
     entries.sort(function(a,b){ return b[1]-a[1]; });
-    var max = entries.length ? entries[0][1] : 0;
+    var totalOutCat = entries.reduce(function(sum, e){ return sum + e[1]; }, 0);
+
+    $("breakdownDonut").innerHTML = buildDonutSVG(entries, totalOutCat);
+
     var list = $("breakdownList");
     list.innerHTML = "";
     if(!entries.length){
       list.innerHTML = '<p class="empty-note">Nenhuma saída registrada ainda.</p>';
     } else {
-      entries.forEach(function(entry){
+      entries.forEach(function(entry, i){
+        var pct = totalOutCat ? Math.round(entry[1] / totalOutCat * 100) : 0;
         var div = document.createElement("div");
-        div.className = "bar-item";
-        var pct = max ? Math.max(4, Math.round(entry[1]/max*100)) : 0;
+        div.className = "legend-item";
         div.innerHTML =
-          '<div class="bar-top"><span>' + escapeHtml(entry[0]) + '</span><span>' + fmt.format(entry[1]) + '</span></div>' +
-          '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>';
+          '<span class="dot" style="background:' + donutPalette[i % donutPalette.length] + '"></span>' +
+          '<span class="name">' + escapeHtml(entry[0]) + '</span>' +
+          '<span class="value">' + fmt.format(entry[1]) + ' · ' + pct + '%</span>';
         list.appendChild(div);
       });
     }
+  }
+
+  function buildDonutSVG(entries, total){
+    var size = 132, r = 48, cx = 66, cy = 66, sw = 16;
+    var circumference = 2 * Math.PI * r;
+    var offset = 0;
+    var segments = "";
+    if(entries.length){
+      entries.forEach(function(entry, i){
+        var frac = total ? entry[1] / total : 0;
+        var len = frac * circumference;
+        segments +=
+          '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" ' +
+          'stroke="' + donutPalette[i % donutPalette.length] + '" stroke-width="' + sw + '" ' +
+          'stroke-dasharray="' + len.toFixed(2) + ' ' + (circumference - len).toFixed(2) + '" ' +
+          'stroke-dashoffset="' + (-offset).toFixed(2) + '" ' +
+          'transform="rotate(-90 ' + cx + ' ' + cy + ')"></circle>';
+        offset += len;
+      });
+    } else {
+      segments = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#2b3340" stroke-width="' + sw + '"></circle>';
+    }
+    var centerVal = fmtCompact.format(total);
+    var centerText =
+      '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" fill="#eae6da" font-family="Public Sans, sans-serif" font-size="14" font-weight="700">' + centerVal + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + 15) + '" text-anchor="middle" fill="#8d96a3" font-family="Public Sans, sans-serif" font-size="9">saídas</text>';
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + segments + centerText + '</svg>';
+  }
+
+  function lastMonths(n){
+    var arr = [];
+    var base = new Date();
+    base.setDate(1);
+    for(var i = n - 1; i >= 0; i--){
+      var dt = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      var key = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0");
+      var label = dt.toLocaleDateString("pt-BR", {month:"short"}).replace(".", "");
+      label = label.charAt(0).toUpperCase() + label.slice(1);
+      arr.push({key: key, label: label, income: 0, expense: 0});
+    }
+    return arr;
+  }
+
+  function buildMonthlyChartSVG(months){
+    var w = Math.max(380, months.length * 74);
+    var h = 190;
+    var padBottom = 24, padTop = 12;
+    var max = 1;
+    months.forEach(function(m){
+      max = Math.max(max, m.income, m.expense);
+    });
+    var groupWidth = w / months.length;
+    var barWidth = Math.min(22, groupWidth / 3.4);
+    var baseY = h - padBottom;
+    var bars = "";
+    months.forEach(function(m, i){
+      var groupX = i * groupWidth + groupWidth / 2;
+      var inH = (m.income / max) * (h - padBottom - padTop);
+      var outH = (m.expense / max) * (h - padBottom - padTop);
+      var inX = groupX - barWidth - 3;
+      var outX = groupX + 3;
+      bars +=
+        '<rect x="' + inX.toFixed(1) + '" y="' + (baseY - inH).toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(0, inH).toFixed(1) + '" fill="#87a17c" rx="1"></rect>' +
+        '<rect x="' + outX.toFixed(1) + '" y="' + (baseY - outH).toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(0, outH).toFixed(1) + '" fill="#c06a4d" rx="1"></rect>' +
+        '<text x="' + groupX.toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11" fill="#8d96a3">' + escapeHtml(m.label) + '</text>';
+    });
+    var baseline = '<line x1="0" y1="' + baseY + '" x2="' + w + '" y2="' + baseY + '" stroke="#2b3340" stroke-width="1"></line>';
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" preserveAspectRatio="xMinYMin meet" class="month-chart">' + baseline + bars + '</svg>';
+  }
+
+  function renderMonthlyChart(){
+    var months = lastMonths(6);
+    var byKey = {};
+    months.forEach(function(m){ byKey[m.key] = m; });
+    transactions.forEach(function(t){
+      var key = t.date.slice(0, 7);
+      var m = byKey[key];
+      if(!m) return;
+      if(t.type === "in") m.income += t.amount; else m.expense += t.amount;
+    });
+    $("monthChartWrap").innerHTML = buildMonthlyChartSVG(months);
   }
 
   function escapeHtml(str){
@@ -859,6 +1037,7 @@
   function renderAll(){
     refreshFilterOptions();
     renderSummary();
+    renderMonthlyChart();
     renderLedger();
   }
 
