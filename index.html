@@ -505,7 +505,8 @@
   @media (max-width:820px){
     .layout{grid-template-columns:1fr;}
     aside{position:static;border-right:none;border-bottom:1px solid var(--line);}
-    thead th:nth-child(3), td:nth-child(3){display:none;}
+    thead th:nth-child(3), td:nth-child(3),
+    thead th:nth-child(4), td:nth-child(4){display:none;}
   }
   @media (prefers-reduced-motion:reduce){
     *{transition:none !important;}
@@ -528,6 +529,7 @@
     </div>
   </div>
   <div class="topbar-actions">
+    <button class="btn btn-ghost" id="managePeopleBtn">👤 Responsáveis</button>
     <button class="btn btn-ghost" id="manageCatBtn">⚙ Categorias</button>
     <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
   </div>
@@ -561,6 +563,11 @@
         <div class="donut" id="incomeDonut"></div>
         <div class="legend" id="incomeList"></div>
       </div>
+    </div>
+
+    <div class="breakdown">
+      <h2>Saldo por responsável</h2>
+      <div id="peopleBreakdownList"></div>
     </div>
 
     <div class="theme-picker">
@@ -599,6 +606,9 @@
         <select id="filterCategory">
           <option value="all">Todas as categorias</option>
         </select>
+        <select id="filterPerson">
+          <option value="all">Todos os responsáveis</option>
+        </select>
         <select id="filterMonth">
           <option value="all">Todos os meses</option>
         </select>
@@ -618,6 +628,7 @@
           <th>Data</th>
           <th>Descrição</th>
           <th>Categoria</th>
+          <th>Quem</th>
           <th class="num">Valor</th>
           <th></th>
         </tr>
@@ -672,6 +683,15 @@
         </div>
       </div>
 
+      <div class="field">
+        <label for="txPerson">Responsável</label>
+        <select id="txPerson"></select>
+        <div class="new-cat-row" id="newPersonRow" hidden>
+          <input type="text" id="newPersonInlineInput" placeholder="Nome do responsável">
+          <button type="button" class="btn btn-ghost" id="confirmNewPerson">Adicionar</button>
+        </div>
+      </div>
+
       <div class="dialog-actions">
         <button type="button" class="btn" id="deleteTxBtn" hidden style="margin-right:auto;">Excluir</button>
         <button type="button" class="btn" id="cancelFormBtn">Cancelar</button>
@@ -709,6 +729,22 @@
   </div>
 </dialog>
 
+<dialog id="peopleDialog">
+  <div class="dialog-inner">
+    <h3>Gerenciar responsáveis</h3>
+    <div class="cat-manage-group">
+      <div class="cat-chip-list" id="peopleList"></div>
+      <div class="new-cat-row">
+        <input type="text" id="newPersonInput" placeholder="Nome do responsável">
+        <button type="button" class="btn btn-ghost" id="addPersonBtn">Adicionar</button>
+      </div>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-primary" id="closePeopleDialog">Concluído</button>
+    </div>
+  </div>
+</dialog>
+
 <script>
 (function(){
   "use strict";
@@ -716,11 +752,13 @@
   var STORAGE_TX = "livrocaixa_transactions";
   var STORAGE_CAT = "livrocaixa_categories";
   var STORAGE_THEME = "livrocaixa_theme";
+  var STORAGE_PEOPLE = "livrocaixa_people";
 
   var defaultCategories = {
     in: ["Salário", "Freelance", "Investimentos", "Outros"],
     out: ["Moradia", "Alimentação", "Transporte", "Saúde", "Lazer", "Contas", "Outros"]
   };
+  var defaultPeople = ["Pessoa 1", "Pessoa 2"];
 
   var THEMES = {
     tinta: {
@@ -784,6 +822,8 @@
 
   var transactions = loadJSON(STORAGE_TX, []);
   var categories = loadJSON(STORAGE_CAT, defaultCategories);
+  var people = loadJSON(STORAGE_PEOPLE, defaultPeople);
+  if(!Array.isArray(people) || !people.length) people = defaultPeople.slice();
 
   var currentType = "out";
   var editingId = null;
@@ -858,6 +898,9 @@
   var txCategory = $("txCategory");
   var newCatRow = $("newCatRow");
   var newCatInput = $("newCatInput");
+  var txPerson = $("txPerson");
+  var newPersonRow = $("newPersonRow");
+  var newPersonInlineInput = $("newPersonInlineInput");
   var txDesc = $("txDesc");
   var txAmount = $("txAmount");
   var txDate = $("txDate");
@@ -912,6 +955,96 @@
   }
   typeInBtn.addEventListener("click", function(){ setType("in"); });
   typeOutBtn.addEventListener("click", function(){ setType("out"); });
+
+  // ---------- responsável (select do formulário) ----------
+  function refreshPersonSelect(){
+    var current = txPerson.value;
+    txPerson.innerHTML = "";
+    people.forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      txPerson.appendChild(opt);
+    });
+    var addOpt = document.createElement("option");
+    addOpt.value = "__add__";
+    addOpt.textContent = "+ Novo responsável…";
+    txPerson.appendChild(addOpt);
+    if(current && people.indexOf(current) !== -1) txPerson.value = current;
+  }
+
+  txPerson.addEventListener("change", function(){
+    if(txPerson.value === "__add__"){
+      newPersonRow.hidden = false;
+      newPersonInlineInput.focus();
+    } else {
+      newPersonRow.hidden = true;
+    }
+  });
+
+  $("confirmNewPerson").addEventListener("click", function(){
+    var name = newPersonInlineInput.value.trim();
+    if(!name) return;
+    if(people.indexOf(name) === -1){
+      people.push(name);
+      saveJSON(STORAGE_PEOPLE, people);
+    }
+    refreshPersonSelect();
+    txPerson.value = name;
+    newPersonRow.hidden = true;
+    newPersonInlineInput.value = "";
+  });
+
+  // ---------- gerenciar responsáveis (diálogo) ----------
+  function renderPeopleManageList(){
+    var el = $("peopleList");
+    el.innerHTML = "";
+    people.forEach(function(name){
+      var chip = document.createElement("span");
+      chip.className = "cat-chip-removable";
+      chip.innerHTML = escapeHtml(name) + ' <button type="button" title="Remover responsável">✕</button>';
+      chip.querySelector("button").addEventListener("click", function(){
+        var inUse = transactions.some(function(t){ return t.person === name; });
+        if(inUse && !window.confirm('"' + name + '" já tem lançamentos associados. Removê-lo da lista não altera os lançamentos existentes, só impede escolhê-lo em novos lançamentos. Continuar?')){
+          return;
+        }
+        people = people.filter(function(p){ return p !== name; });
+        if(!people.length){ people = defaultPeople.slice(); }
+        saveJSON(STORAGE_PEOPLE, people);
+        renderPeopleManageList();
+        refreshPersonSelect();
+        renderAll();
+      });
+      el.appendChild(chip);
+    });
+  }
+
+  function addPersonFromDialog(){
+    var input = $("newPersonInput");
+    var name = input.value.trim();
+    if(!name) return;
+    if(people.indexOf(name) === -1){
+      people.push(name);
+      saveJSON(STORAGE_PEOPLE, people);
+    }
+    input.value = "";
+    renderPeopleManageList();
+    refreshPersonSelect();
+  }
+
+  $("managePeopleBtn").addEventListener("click", function(){
+    renderPeopleManageList();
+    $("peopleDialog").showModal();
+  });
+  $("closePeopleDialog").addEventListener("click", function(){
+    $("peopleDialog").close();
+    refreshPersonSelect();
+    renderAll();
+  });
+  $("addPersonBtn").addEventListener("click", addPersonFromDialog);
+  $("newPersonInput").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); addPersonFromDialog(); }
+  });
 
   // ---------- gerenciar categorias ----------
   function renderCatChipList(type, containerId){
@@ -1004,6 +1137,9 @@
       setType(match.type);
       refreshCategorySelect();
       txCategory.value = match.category;
+      if(match.person && people.indexOf(match.person) !== -1){
+        txPerson.value = match.person;
+      }
       if(!txAmount.value){
         txAmount.value = match.amount;
       }
@@ -1019,6 +1155,8 @@
     txForm.reset();
     autofillHint.hidden = true;
     newCatRow.hidden = true;
+    newPersonRow.hidden = true;
+    refreshPersonSelect();
     if(existing){
       editingId = existing.id;
       dialogTitle.textContent = "Editar lançamento";
@@ -1029,6 +1167,9 @@
       txDate.value = existing.date;
       refreshCategorySelect();
       txCategory.value = existing.category;
+      if(existing.person && people.indexOf(existing.person) !== -1){
+        txPerson.value = existing.person;
+      }
     } else {
       editingId = null;
       dialogTitle.textContent = "Novo lançamento";
@@ -1054,11 +1195,13 @@
   txForm.addEventListener("submit", function(e){
     e.preventDefault();
     var catValue = txCategory.value === "__add__" ? "Outros" : txCategory.value;
+    var personValue = txPerson.value === "__add__" ? people[0] : txPerson.value;
     var record = {
       id: editingId || uid(),
       type: currentType,
       description: txDesc.value.trim(),
       category: catValue,
+      person: personValue,
       amount: Math.round(parseFloat(txAmount.value || "0") * 100) / 100,
       date: txDate.value
     };
@@ -1078,10 +1221,11 @@
   var filterSearch = $("filterSearch");
   var filterType = $("filterType");
   var filterCategory = $("filterCategory");
+  var filterPerson = $("filterPerson");
   var filterMonth = $("filterMonth");
   var filterDateFrom = $("filterDateFrom");
   var filterDateTo = $("filterDateTo");
-  [filterSearch, filterType, filterCategory, filterMonth, filterDateFrom, filterDateTo].forEach(function(el){
+  [filterSearch, filterType, filterCategory, filterPerson, filterMonth, filterDateFrom, filterDateTo].forEach(function(el){
     el.addEventListener("input", renderLedger);
     el.addEventListener("change", renderLedger);
   });
@@ -1090,6 +1234,7 @@
     filterSearch.value = "";
     filterType.value = "all";
     filterCategory.value = "all";
+    filterPerson.value = "all";
     filterMonth.value = "all";
     filterDateFrom.value = "";
     filterDateTo.value = "";
@@ -1110,6 +1255,16 @@
     if(Array.prototype.indexOf.call(filterCategory.options, prevCat) !== -1 || allCats[prevCat]){
       filterCategory.value = prevCat;
     }
+
+    var prevPerson = filterPerson.value;
+    filterPerson.innerHTML = '<option value="all">Todos os responsáveis</option>';
+    people.forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      filterPerson.appendChild(opt);
+    });
+    if(people.indexOf(prevPerson) !== -1) filterPerson.value = prevPerson;
 
     var months = {};
     transactions.forEach(function(t){ months[t.date.slice(0,7)] = true; });
@@ -1142,6 +1297,35 @@
 
     renderCategoryDonut("out", "breakdownDonut", "breakdownList", "saídas");
     renderCategoryDonut("in", "incomeDonut", "incomeList", "entradas");
+    renderPeopleBreakdown();
+  }
+
+  function renderPeopleBreakdown(){
+    var byPerson = {};
+    transactions.forEach(function(t){
+      var name = t.person || "Sem responsável";
+      if(!byPerson[name]) byPerson[name] = {income: 0, expense: 0};
+      if(t.type === "in") byPerson[name].income += t.amount; else byPerson[name].expense += t.amount;
+    });
+    var names = people.slice();
+    Object.keys(byPerson).forEach(function(n){ if(names.indexOf(n) === -1) names.push(n); });
+
+    var wrap = $("peopleBreakdownList");
+    wrap.innerHTML = "";
+    if(!names.length){
+      wrap.innerHTML = '<p class="empty-note">Nenhum responsável cadastrado.</p>';
+      return;
+    }
+    names.forEach(function(name){
+      var data = byPerson[name] || {income: 0, expense: 0};
+      var saldo = data.income - data.expense;
+      var row = document.createElement("div");
+      row.className = "stat-row";
+      row.innerHTML =
+        '<span>' + escapeHtml(name) + '</span>' +
+        '<span class="amount ' + (saldo < 0 ? "out" : "in") + '">' + fmt.format(saldo) + '</span>';
+      wrap.appendChild(row);
+    });
   }
 
   function renderCategoryDonut(type, donutId, listId, label){
@@ -1283,6 +1467,7 @@
     var search = filterSearch.value.trim().toLowerCase();
     var type = filterType.value;
     var cat = filterCategory.value;
+    var person = filterPerson.value;
     var month = filterMonth.value;
     var dateFrom = filterDateFrom.value;
     var dateTo = filterDateTo.value;
@@ -1290,6 +1475,7 @@
     var rows = transactions.filter(function(t){
       if(type !== "all" && t.type !== type) return false;
       if(cat !== "all" && t.category !== cat) return false;
+      if(person !== "all" && t.person !== person) return false;
       if(month !== "all" && t.date.slice(0,7) !== month) return false;
       if(dateFrom && t.date < dateFrom) return false;
       if(dateTo && t.date > dateTo) return false;
@@ -1306,6 +1492,7 @@
         '<td>' + dateFmt.format(new Date(t.date + "T00:00:00Z")) + '</td>' +
         '<td>' + escapeHtml(t.description) + '</td>' +
         '<td><span class="cat-chip">' + escapeHtml(t.category) + '</span></td>' +
+        '<td><span class="cat-chip">' + escapeHtml(t.person || "—") + '</span></td>' +
         '<td class="num ' + t.type + '">' + (t.type === "in" ? "+ " : "− ") + fmt.format(t.amount) + '</td>' +
         '<td><button class="row-del" title="Excluir" data-id="' + t.id + '">✕</button></td>';
       tr.addEventListener("click", function(e){
@@ -1343,16 +1530,16 @@
   }
 
   $("exportBtn").addEventListener("click", function(){
-    var data = {transactions: transactions, categories: categories};
+    var data = {transactions: transactions, categories: categories, people: people};
     download("financas-backup.json", JSON.stringify(data, null, 2), "application/json");
   });
 
   $("exportCsvBtn").addEventListener("click", function(){
-    var header = "data,tipo,descricao,categoria,valor\n";
+    var header = "data,tipo,descricao,categoria,responsavel,valor\n";
     var rows = transactions.map(function(t){
       var tipo = t.type === "in" ? "entrada" : "saida";
       var desc = '"' + t.description.replace(/"/g,'""') + '"';
-      return [t.date, tipo, desc, t.category, t.amount.toFixed(2)].join(",");
+      return [t.date, tipo, desc, t.category, t.person || "", t.amount.toFixed(2)].join(",");
     });
     download("financas.csv", header + rows.join("\n"), "text/csv");
   });
@@ -1373,6 +1560,10 @@
           categories = data.categories;
           saveJSON(STORAGE_CAT, categories);
         }
+        if(Array.isArray(data.people) && data.people.length){
+          people = data.people;
+          saveJSON(STORAGE_PEOPLE, people);
+        }
         renderAll();
       }catch(err){
         alert("Não foi possível ler este arquivo. Verifique se é um backup exportado por este site.");
@@ -1386,6 +1577,7 @@
   applyThemeVars(currentThemeKey);
   renderThemePicker();
   refreshCategorySelect();
+  refreshPersonSelect();
   renderAll();
 })();
 </script>
