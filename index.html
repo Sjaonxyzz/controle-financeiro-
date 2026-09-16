@@ -249,6 +249,79 @@
     overflow:visible;
   }
 
+  .topbar-actions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+
+  .theme-picker{
+    margin-top:28px;
+    padding-top:20px;
+    border-top:1px solid var(--line);
+  }
+  .theme-picker h2{
+    font-family:var(--serif);
+    font-weight:500;
+    font-size:15px;
+    margin:0 0 12px;
+  }
+  .theme-swatches{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .theme-swatch{
+    width:34px;
+    height:34px;
+    border-radius:9px;
+    border:2px solid var(--line);
+    padding:0;
+    cursor:pointer;
+    background-size:cover;
+    transition:border-color .15s ease, transform .1s ease;
+  }
+  .theme-swatch:hover{transform:translateY(-1px);}
+  .theme-swatch.active{border-color:var(--paper);}
+
+  .cat-manage-group{margin-bottom:20px;}
+  .cat-manage-group h4{
+    font-family:var(--sans);
+    font-size:11px;
+    color:var(--muted);
+    margin:0 0 10px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+  }
+  .cat-chip-list{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:10px;
+    min-height:20px;
+  }
+  .cat-chip-removable{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    padding:5px 6px 5px 11px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    color:var(--paper);
+    background:var(--panel-2);
+  }
+  .cat-chip-removable button{
+    background:none;
+    border:none;
+    color:var(--muted);
+    cursor:pointer;
+    font-size:13px;
+    line-height:1;
+    padding:2px;
+  }
+  .cat-chip-removable button:hover{color:var(--expense);}
+
   .data-actions{
     margin-top:28px;
     padding-top:20px;
@@ -444,17 +517,20 @@
 <header class="topbar">
   <div class="brand">
     <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="1" y="1" width="28" height="28" rx="2" stroke="#d9a544" stroke-width="1.4"/>
-      <line x1="6" y1="9" x2="24" y2="9" stroke="#d9a544" stroke-width="1.2"/>
-      <line x1="6" y1="15" x2="17" y2="15" stroke="#8d96a3" stroke-width="1.2"/>
-      <line x1="6" y1="21" x2="20" y2="21" stroke="#8d96a3" stroke-width="1.2"/>
+      <rect x="1" y="1" width="28" height="28" rx="2" style="stroke:var(--gold)" stroke-width="1.4"/>
+      <line x1="6" y1="9" x2="24" y2="9" style="stroke:var(--gold)" stroke-width="1.2"/>
+      <line x1="6" y1="15" x2="17" y2="15" style="stroke:var(--muted)" stroke-width="1.2"/>
+      <line x1="6" y1="21" x2="20" y2="21" style="stroke:var(--muted)" stroke-width="1.2"/>
     </svg>
     <div>
       <h1>Finanças</h1>
       <p>seus lançamentos, guardados só neste navegador</p>
     </div>
   </div>
-  <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
+  <div class="topbar-actions">
+    <button class="btn btn-ghost" id="manageCatBtn">⚙ Categorias</button>
+    <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
+  </div>
 </header>
 
 <div class="layout">
@@ -487,6 +563,11 @@
       </div>
     </div>
 
+    <div class="theme-picker">
+      <h2>Paleta de cores</h2>
+      <div class="theme-swatches" id="themeSwatches"></div>
+    </div>
+
     <div class="data-actions">
       <button class="btn btn-ghost" id="exportBtn">↓ Exportar backup (.json)</button>
       <button class="btn btn-ghost" id="importBtn">↑ Importar backup (.json)</button>
@@ -500,8 +581,8 @@
       <h2>Entradas x Saídas</h2>
       <p class="sub">Últimos 6 meses</p>
       <div class="chart-legend-row">
-        <span class="key"><span class="swatch" style="background:#87a17c"></span>Entradas</span>
-        <span class="key"><span class="swatch" style="background:#c06a4d"></span>Saídas</span>
+        <span class="key"><span class="swatch" id="incomeSwatch" style="background:#87a17c"></span>Entradas</span>
+        <span class="key"><span class="swatch" id="expenseSwatch" style="background:#c06a4d"></span>Saídas</span>
       </div>
       <div id="monthChartWrap"></div>
     </section>
@@ -600,16 +681,88 @@
   </div>
 </dialog>
 
+<dialog id="catDialog">
+  <div class="dialog-inner">
+    <h3>Gerenciar categorias</h3>
+
+    <div class="cat-manage-group">
+      <h4>Entradas</h4>
+      <div class="cat-chip-list" id="catListIn"></div>
+      <div class="new-cat-row">
+        <input type="text" id="newCatInputIn" placeholder="Nova categoria de entrada">
+        <button type="button" class="btn btn-ghost" id="addCatIn">Adicionar</button>
+      </div>
+    </div>
+
+    <div class="cat-manage-group">
+      <h4>Saídas</h4>
+      <div class="cat-chip-list" id="catListOut"></div>
+      <div class="new-cat-row">
+        <input type="text" id="newCatInputOut" placeholder="Nova categoria de saída">
+        <button type="button" class="btn btn-ghost" id="addCatOut">Adicionar</button>
+      </div>
+    </div>
+
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-primary" id="closeCatDialog">Concluído</button>
+    </div>
+  </div>
+</dialog>
+
 <script>
 (function(){
   "use strict";
 
   var STORAGE_TX = "livrocaixa_transactions";
   var STORAGE_CAT = "livrocaixa_categories";
+  var STORAGE_THEME = "livrocaixa_theme";
 
   var defaultCategories = {
     in: ["Salário", "Freelance", "Investimentos", "Outros"],
     out: ["Moradia", "Alimentação", "Transporte", "Saúde", "Lazer", "Contas", "Outros"]
+  };
+
+  var THEMES = {
+    tinta: {
+      name: "Tinta & Ouro",
+      ink:"#12161c", panel:"#1a2029", panel2:"#20272f", line:"#2b3340",
+      paper:"#eae6da", muted:"#8d96a3",
+      income:"#87a17c", incomeDim:"#3a4638",
+      expense:"#c06a4d", expenseDim:"#4a352c",
+      gold:"#d9a544",
+      donutPalette:["#c06a4d","#d9a544","#87a17c","#6b8ea8","#a88bc9","#c9738f","#7fae9c","#b98f5e"],
+      incomePalette:["#87a17c","#6b8ea8","#d9a544","#7fae9c","#a88bc9","#c9738f","#b98f5e","#c06a4d"]
+    },
+    musgo: {
+      name: "Musgo",
+      ink:"#12160f", panel:"#191f15", panel2:"#20281a", line:"#2d3624",
+      paper:"#e9e6da", muted:"#909a86",
+      income:"#9cb56a", incomeDim:"#3d4a2a",
+      expense:"#c98a4b", expenseDim:"#4d3a22",
+      gold:"#d4b45a",
+      donutPalette:["#c98a4b","#d4b45a","#9cb56a","#6f9a82","#b7a15a","#8fae55","#d19a6a","#5f8f6b"],
+      incomePalette:["#9cb56a","#6f9a82","#d4b45a","#8fae55","#b7a15a","#5f8f6b","#d19a6a","#c98a4b"]
+    },
+    meianoite: {
+      name: "Meia-noite",
+      ink:"#0d1420", panel:"#131c2b", panel2:"#182233", line:"#243149",
+      paper:"#e6ecf5", muted:"#7f8fa8",
+      income:"#5fb0a8", incomeDim:"#1f3f3c",
+      expense:"#d17a7a", expenseDim:"#4a2a2a",
+      gold:"#7aa4d1",
+      donutPalette:["#d17a7a","#7aa4d1","#5fb0a8","#a68cd1","#c9a05f","#7f97d1","#8f6fae","#5fb0a8"],
+      incomePalette:["#5fb0a8","#7aa4d1","#a68cd1","#7f97d1","#c9a05f","#8f6fae","#d17a7a","#5fb0a8"]
+    },
+    vinho: {
+      name: "Vinho",
+      ink:"#170f13", panel:"#20151b", panel2:"#291b22", line:"#3a2530",
+      paper:"#ecdfe1", muted:"#9c848c",
+      income:"#8aab7a", incomeDim:"#33442c",
+      expense:"#c9714f", expenseDim:"#4a2f24",
+      gold:"#c98a54",
+      donutPalette:["#c9714f","#c98a54","#8aab7a","#a3708a","#c9a05f","#8f6f8a","#b98a6f","#7a9c8a"],
+      incomePalette:["#8aab7a","#7a9c8a","#c98a54","#b98a6f","#a3708a","#c9a05f","#8f6f8a","#c9714f"]
+    }
   };
 
   function loadJSON(key, fallback){
@@ -638,8 +791,54 @@
   var fmt = new Intl.NumberFormat("pt-BR", {style:"currency", currency:"BRL"});
   var fmtCompact = new Intl.NumberFormat("pt-BR", {style:"currency", currency:"BRL", notation:"compact", maximumFractionDigits:1});
   var dateFmt = new Intl.DateTimeFormat("pt-BR", {day:"2-digit", month:"2-digit", year:"numeric", timeZone:"UTC"});
-  var donutPalette = ["#c06a4d", "#d9a544", "#87a17c", "#6b8ea8", "#a88bc9", "#c9738f", "#7fae9c", "#b98f5e"];
-  var incomePalette = ["#87a17c", "#6b8ea8", "#d9a544", "#7fae9c", "#a88bc9", "#c9738f", "#b98f5e", "#c06a4d"];
+  var currentThemeKey = loadJSON(STORAGE_THEME, "tinta");
+  if(!THEMES[currentThemeKey]) currentThemeKey = "tinta";
+
+  function getTheme(){
+    return THEMES[currentThemeKey] || THEMES.tinta;
+  }
+
+  function applyThemeVars(key){
+    var t = THEMES[key] || THEMES.tinta;
+    var root = document.documentElement.style;
+    root.setProperty("--ink", t.ink);
+    root.setProperty("--panel", t.panel);
+    root.setProperty("--panel-2", t.panel2);
+    root.setProperty("--line", t.line);
+    root.setProperty("--paper", t.paper);
+    root.setProperty("--muted", t.muted);
+    root.setProperty("--income", t.income);
+    root.setProperty("--income-dim", t.incomeDim);
+    root.setProperty("--expense", t.expense);
+    root.setProperty("--expense-dim", t.expenseDim);
+    root.setProperty("--gold", t.gold);
+  }
+
+  function applyTheme(key){
+    if(!THEMES[key]) return;
+    currentThemeKey = key;
+    saveJSON(STORAGE_THEME, key);
+    applyThemeVars(key);
+    renderThemePicker();
+    renderAll();
+  }
+
+  function renderThemePicker(){
+    var wrap = $("themeSwatches");
+    if(!wrap) return;
+    wrap.innerHTML = "";
+    Object.keys(THEMES).forEach(function(key){
+      var t = THEMES[key];
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "theme-swatch" + (key === currentThemeKey ? " active" : "");
+      btn.title = t.name;
+      btn.setAttribute("aria-label", t.name);
+      btn.style.background = "linear-gradient(135deg, " + t.ink + " 0%, " + t.ink + " 34%, " + t.gold + " 34%, " + t.gold + " 67%, " + t.income + " 67%, " + t.income + " 100%)";
+      btn.addEventListener("click", function(){ applyTheme(key); });
+      wrap.appendChild(btn);
+    });
+  }
 
   function todayISO(){
     var d = new Date();
@@ -713,6 +912,65 @@
   }
   typeInBtn.addEventListener("click", function(){ setType("in"); });
   typeOutBtn.addEventListener("click", function(){ setType("out"); });
+
+  // ---------- gerenciar categorias ----------
+  function renderCatChipList(type, containerId){
+    var el = $(containerId);
+    el.innerHTML = "";
+    categories[type].forEach(function(name){
+      var chip = document.createElement("span");
+      chip.className = "cat-chip-removable";
+      chip.innerHTML = escapeHtml(name) + ' <button type="button" title="Remover categoria">✕</button>';
+      chip.querySelector("button").addEventListener("click", function(){
+        var inUse = transactions.some(function(t){ return t.type === type && t.category === name; });
+        if(inUse && !window.confirm('A categoria "' + name + '" já tem lançamentos. Removê-la da lista não altera os lançamentos existentes, só impede novos lançamentos nessa categoria. Continuar?')){
+          return;
+        }
+        categories[type] = categories[type].filter(function(c){ return c !== name; });
+        saveJSON(STORAGE_CAT, categories);
+        renderCatManageLists();
+        refreshCategorySelect();
+        renderAll();
+      });
+      el.appendChild(chip);
+    });
+  }
+
+  function renderCatManageLists(){
+    renderCatChipList("in", "catListIn");
+    renderCatChipList("out", "catListOut");
+  }
+
+  function addCategoryFromDialog(type, inputId){
+    var input = $(inputId);
+    var name = input.value.trim();
+    if(!name) return;
+    if(categories[type].indexOf(name) === -1){
+      categories[type].push(name);
+      saveJSON(STORAGE_CAT, categories);
+    }
+    input.value = "";
+    renderCatManageLists();
+    refreshCategorySelect();
+  }
+
+  $("manageCatBtn").addEventListener("click", function(){
+    renderCatManageLists();
+    $("catDialog").showModal();
+  });
+  $("closeCatDialog").addEventListener("click", function(){
+    $("catDialog").close();
+    refreshCategorySelect();
+    renderAll();
+  });
+  $("addCatIn").addEventListener("click", function(){ addCategoryFromDialog("in", "newCatInputIn"); });
+  $("addCatOut").addEventListener("click", function(){ addCategoryFromDialog("out", "newCatInputOut"); });
+  $("newCatInputIn").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); addCategoryFromDialog("in", "newCatInputIn"); }
+  });
+  $("newCatInputOut").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); addCategoryFromDialog("out", "newCatInputOut"); }
+  });
 
   // ---------- autonomous fill ----------
   function refreshDescSuggestions(){
@@ -896,7 +1154,8 @@
     entries.sort(function(a,b){ return b[1]-a[1]; });
     var total = entries.reduce(function(sum, e){ return sum + e[1]; }, 0);
 
-    var palette = type === "in" ? incomePalette : donutPalette;
+    var theme = getTheme();
+    var palette = type === "in" ? theme.incomePalette : theme.donutPalette;
     $(donutId).innerHTML = buildDonutSVG(entries, total, label, palette);
 
     var list = $(listId);
@@ -918,7 +1177,8 @@
   }
 
   function buildDonutSVG(entries, total, label, palette){
-    palette = palette || donutPalette;
+    var theme = getTheme();
+    palette = palette || theme.donutPalette;
     var size = 132, r = 48, cx = 66, cy = 66, sw = 16;
     var circumference = 2 * Math.PI * r;
     var offset = 0;
@@ -936,12 +1196,12 @@
         offset += len;
       });
     } else {
-      segments = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#2b3340" stroke-width="' + sw + '"></circle>';
+      segments = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + theme.line + '" stroke-width="' + sw + '"></circle>';
     }
     var centerVal = fmtCompact.format(total);
     var centerText =
-      '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" fill="#eae6da" font-family="Public Sans, sans-serif" font-size="14" font-weight="700">' + centerVal + '</text>' +
-      '<text x="' + cx + '" y="' + (cy + 15) + '" text-anchor="middle" fill="#8d96a3" font-family="Public Sans, sans-serif" font-size="9">' + escapeHtml(label) + '</text>';
+      '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" fill="' + theme.paper + '" font-family="Public Sans, sans-serif" font-size="14" font-weight="700">' + centerVal + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + 15) + '" text-anchor="middle" fill="' + theme.muted + '" font-family="Public Sans, sans-serif" font-size="9">' + escapeHtml(label) + '</text>';
     return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' + segments + centerText + '</svg>';
   }
 
@@ -960,6 +1220,7 @@
   }
 
   function buildMonthlyChartSVG(months, containerWidth){
+    var theme = getTheme();
     var w = Math.max(380, containerWidth || months.length * 74);
     var h = 190;
     var padBottom = 24, padTop = 12;
@@ -978,11 +1239,11 @@
       var inX = groupX - barWidth - 3;
       var outX = groupX + 3;
       bars +=
-        '<rect x="' + inX.toFixed(1) + '" y="' + (baseY - inH).toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(0, inH).toFixed(1) + '" fill="#87a17c" rx="1"></rect>' +
-        '<rect x="' + outX.toFixed(1) + '" y="' + (baseY - outH).toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(0, outH).toFixed(1) + '" fill="#c06a4d" rx="1"></rect>' +
-        '<text x="' + groupX.toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11" fill="#8d96a3">' + escapeHtml(m.label) + '</text>';
+        '<rect x="' + inX.toFixed(1) + '" y="' + (baseY - inH).toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(0, inH).toFixed(1) + '" fill="' + theme.income + '" rx="1"></rect>' +
+        '<rect x="' + outX.toFixed(1) + '" y="' + (baseY - outH).toFixed(1) + '" width="' + barWidth.toFixed(1) + '" height="' + Math.max(0, outH).toFixed(1) + '" fill="' + theme.expense + '" rx="1"></rect>' +
+        '<text x="' + groupX.toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="11" fill="' + theme.muted + '">' + escapeHtml(m.label) + '</text>';
     });
-    var baseline = '<line x1="0" y1="' + baseY + '" x2="' + w + '" y2="' + baseY + '" stroke="#2b3340" stroke-width="1"></line>';
+    var baseline = '<line x1="0" y1="' + baseY + '" x2="' + w + '" y2="' + baseY + '" stroke="' + theme.line + '" stroke-width="1"></line>';
     return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" height="' + h + '" preserveAspectRatio="xMinYMin meet" class="month-chart">' + baseline + bars + '</svg>';
   }
 
@@ -999,6 +1260,9 @@
     var wrap = $("monthChartWrap");
     var containerWidth = wrap.clientWidth || 600;
     wrap.innerHTML = buildMonthlyChartSVG(months, containerWidth);
+    var theme = getTheme();
+    if($("incomeSwatch")) $("incomeSwatch").style.background = theme.income;
+    if($("expenseSwatch")) $("expenseSwatch").style.background = theme.expense;
   }
 
   var resizeTimer = null;
@@ -1119,6 +1383,8 @@
   });
 
   // ---------- init ----------
+  applyThemeVars(currentThemeKey);
+  renderThemePicker();
   refreshCategorySelect();
   renderAll();
 })();
