@@ -252,6 +252,80 @@
     overflow:visible;
   }
 
+  .month-summary-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+  }
+  .month-nav{
+    display:flex;
+    gap:6px;
+  }
+  .month-nav .btn{padding:8px 14px;}
+  .month-summary-stats{
+    display:flex;
+    gap:32px;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+  }
+  .month-stat .label{
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 4px;
+  }
+  .month-stat .value{
+    font-family:var(--serif);
+    font-weight:500;
+    font-size:28px;
+    margin:0;
+    font-variant-numeric:tabular-nums;
+  }
+  .month-stat .value.in{color:var(--income);}
+  .month-stat .value.out{color:var(--expense);}
+  .month-summary-cats{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .month-cat-row{
+    display:grid;
+    grid-template-columns:10px minmax(90px,160px) 1fr auto;
+    align-items:center;
+    gap:10px;
+    font-size:13px;
+  }
+  .month-cat-row .dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+  }
+  .month-cat-row .name{
+    color:var(--paper);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .month-cat-row .bar-track{
+    height:6px;
+    background:var(--panel-2);
+    border-radius:2px;
+    overflow:hidden;
+  }
+  .month-cat-row .bar-fill{
+    display:block;
+    height:100%;
+    border-radius:2px;
+  }
+  .month-cat-row .value{
+    color:var(--muted);
+    font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+
   .topbar-actions{
     display:flex;
     align-items:center;
@@ -691,6 +765,36 @@
   </aside>
 
   <main>
+    <section class="dashboard-section month-summary">
+      <div class="month-summary-head">
+        <div>
+          <h2>Resumo do mês</h2>
+          <p class="sub" id="monthSummaryLabel">—</p>
+        </div>
+        <div class="month-nav">
+          <button type="button" class="btn btn-ghost" id="prevMonthBtn" aria-label="Mês anterior">‹</button>
+          <button type="button" class="btn btn-ghost" id="todayMonthBtn">Hoje</button>
+          <button type="button" class="btn btn-ghost" id="nextMonthBtn" aria-label="Próximo mês">›</button>
+        </div>
+      </div>
+      <div class="month-summary-stats">
+        <div class="month-stat">
+          <p class="label">Entradas</p>
+          <p class="value in" id="monthSummaryIn">R$ 0,00</p>
+        </div>
+        <div class="month-stat">
+          <p class="label">Saídas</p>
+          <p class="value out" id="monthSummaryOut">R$ 0,00</p>
+        </div>
+        <div class="month-stat">
+          <p class="label">Saldo do mês</p>
+          <p class="value" id="monthSummaryBalance">R$ 0,00</p>
+        </div>
+      </div>
+      <div class="month-summary-cats" id="monthSummaryCats"></div>
+      <button type="button" class="btn btn-ghost" id="viewMonthLedgerBtn">Ver lançamentos deste mês →</button>
+    </section>
+
     <section class="dashboard-section">
       <h2>Entradas x Saídas</h2>
       <p class="sub">Últimos 6 meses</p>
@@ -1651,10 +1755,94 @@
     });
   }
 
+  // ---------- resumo do mês (com navegação) ----------
+  var summaryMonthOffset = 0;
+
+  function monthInfoFromOffset(offset){
+    var d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + offset);
+    var key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    var label = d.toLocaleDateString("pt-BR", {month: "long", year: "numeric"});
+    label = label.charAt(0).toUpperCase() + label.slice(1);
+    return {key: key, label: label, year: d.getFullYear(), month: d.getMonth()};
+  }
+
+  function renderMonthSummary(){
+    var info = monthInfoFromOffset(summaryMonthOffset);
+    $("monthSummaryLabel").textContent = info.label + (summaryMonthOffset === 0 ? " (este mês)" : "");
+    $("todayMonthBtn").disabled = summaryMonthOffset === 0;
+
+    var inc = 0, out = 0;
+    var byCat = {};
+    transactions.forEach(function(t){
+      if(t.date.slice(0, 7) !== info.key) return;
+      if(t.type === "in"){
+        inc += t.amount;
+      } else {
+        out += t.amount;
+        byCat[t.category] = (byCat[t.category] || 0) + t.amount;
+      }
+    });
+
+    $("monthSummaryIn").textContent = fmt.format(inc);
+    $("monthSummaryOut").textContent = fmt.format(out);
+    var bal = inc - out;
+    var balEl = $("monthSummaryBalance");
+    balEl.textContent = fmt.format(bal);
+    balEl.classList.toggle("in", bal >= 0);
+    balEl.classList.toggle("out", bal < 0);
+
+    var entries = Object.keys(byCat).map(function(k){ return [k, byCat[k]]; });
+    entries.sort(function(a, b){ return b[1] - a[1]; });
+    var theme = getTheme();
+    var wrap = $("monthSummaryCats");
+    wrap.innerHTML = "";
+    if(!entries.length){
+      var msg = summaryMonthOffset > 0
+        ? "Nenhum gasto lançado para este mês ainda — se você já sabe de alguma conta futura, pode lançá-la com a data certa que ela aparece aqui."
+        : "Nenhum gasto lançado neste mês ainda.";
+      wrap.innerHTML = '<p class="empty-note">' + msg + '</p>';
+    } else {
+      var max = entries[0][1];
+      entries.slice(0, 5).forEach(function(entry, i){
+        var pct = Math.max(4, Math.round(entry[1] / max * 100));
+        var color = theme.donutPalette[i % theme.donutPalette.length];
+        var row = document.createElement("div");
+        row.className = "month-cat-row";
+        row.innerHTML =
+          '<span class="dot" style="background:' + color + '"></span>' +
+          '<span class="name">' + escapeHtml(entry[0]) + '</span>' +
+          '<span class="bar-track"><span class="bar-fill" style="width:' + pct + '%;background:' + color + '"></span></span>' +
+          '<span class="value">' + fmt.format(entry[1]) + '</span>';
+        wrap.appendChild(row);
+      });
+    }
+  }
+
+  $("prevMonthBtn").addEventListener("click", function(){ summaryMonthOffset--; renderMonthSummary(); });
+  $("nextMonthBtn").addEventListener("click", function(){ summaryMonthOffset++; renderMonthSummary(); });
+  $("todayMonthBtn").addEventListener("click", function(){ summaryMonthOffset = 0; renderMonthSummary(); });
+
+  $("viewMonthLedgerBtn").addEventListener("click", function(){
+    var info = monthInfoFromOffset(summaryMonthOffset);
+    var lastDay = new Date(info.year, info.month + 1, 0).getDate();
+    filterMonth.value = "all";
+    filterType.value = "all";
+    filterCategory.value = "all";
+    filterPerson.value = "all";
+    filterSearch.value = "";
+    filterDateFrom.value = info.key + "-01";
+    filterDateTo.value = info.key + "-" + String(lastDay).padStart(2, "0");
+    renderLedger();
+    document.querySelector(".main-head").scrollIntoView({behavior: "smooth", block: "start"});
+  });
+
   function renderAll(){
     refreshFilterOptions();
     renderSummary();
     renderMonthlyChart();
+    renderMonthSummary();
     renderLedger();
   }
 
