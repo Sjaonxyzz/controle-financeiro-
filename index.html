@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --ink:#12161c;
@@ -511,9 +514,111 @@
   @media (prefers-reduced-motion:reduce){
     *{transition:none !important;}
   }
+
+  /* ---------- autenticação ---------- */
+  #appShell{display:none;}
+  .auth-screen{
+    display:flex;
+    min-height:100vh;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .auth-card{
+    width:min(380px, 100%);
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--panel);
+    padding:32px;
+  }
+  .auth-card h1{
+    font-family:var(--serif);
+    font-weight:500;
+    font-size:26px;
+    margin:0 0 6px;
+  }
+  .auth-card > p{
+    font-size:13px;
+    color:var(--muted);
+    margin:0 0 22px;
+  }
+  .auth-tabs{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin-bottom:20px;
+  }
+  .auth-tabs button{
+    flex:1;
+    padding:10px;
+    background:var(--panel-2);
+    border:none;
+    color:var(--muted);
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+  }
+  .auth-tabs button.active{background:var(--gold);color:#1c1204;}
+  .auth-error{
+    font-size:12.5px;
+    color:var(--expense);
+    margin:0 0 14px;
+  }
+  .auth-error.success{color:var(--income);}
+  .auth-actions{margin-top:6px;}
+  .auth-actions .btn{width:100%;}
+  .auth-hint{
+    font-size:12px;
+    color:var(--muted);
+    margin:16px 0 0;
+    text-align:center;
+  }
+  .auth-hint a{color:var(--gold);text-decoration:none;}
+  .auth-hint a:hover{text-decoration:underline;}
+  .user-badge{
+    font-size:12px;
+    color:var(--muted);
+    padding:6px 4px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:160px;
+  }
 </style>
 </head>
 <body>
+
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <h1>Finanças</h1>
+    <p>Entre para acessar seus lançamentos em qualquer aparelho.</p>
+
+    <div class="auth-tabs">
+      <button type="button" class="active" data-mode="login" id="authTabLogin">Entrar</button>
+      <button type="button" data-mode="signup" id="authTabSignup">Criar conta</button>
+    </div>
+
+    <div class="field">
+      <label for="authEmail">E-mail</label>
+      <input type="email" id="authEmail" autocomplete="email" placeholder="voce@exemplo.com">
+    </div>
+    <div class="field">
+      <label for="authPassword">Senha</label>
+      <input type="password" id="authPassword" autocomplete="current-password" placeholder="mínimo 6 caracteres">
+    </div>
+
+    <p class="auth-error" id="authError" hidden></p>
+
+    <div class="auth-actions">
+      <button type="button" class="btn btn-primary" id="authSubmitBtn">Entrar</button>
+    </div>
+    <p class="auth-hint">Esqueceu a senha? <a href="#" id="authResetLink">Recuperar por e-mail</a></p>
+  </div>
+</div>
+
+<div id="appShell">
 
 <header class="topbar">
   <div class="brand">
@@ -525,13 +630,15 @@
     </svg>
     <div>
       <h1>Finanças</h1>
-      <p>seus lançamentos, guardados só neste navegador</p>
+      <p>sincronizado na sua conta</p>
     </div>
   </div>
   <div class="topbar-actions">
+    <span class="user-badge" id="userBadge"></span>
     <button class="btn btn-ghost" id="managePeopleBtn">👤 Responsáveis</button>
     <button class="btn btn-ghost" id="manageCatBtn">⚙ Categorias</button>
     <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
+    <button class="btn btn-ghost" id="logoutBtn">Sair</button>
   </div>
 </header>
 
@@ -643,7 +750,7 @@
 </div>
 
 <footer>
-  Os dados ficam salvos apenas no navegador deste computador (localStorage). Use “Exportar backup” antes de trocar de navegador ou dispositivo, e “Importar” para trazê-los de volta.
+  Seus dados ficam salvos na sua conta e sincronizados entre qualquer aparelho onde você entrar. Uma cópia também é guardada neste navegador para abrir mais rápido. Use “Exportar backup” de vez em quando por segurança.
 </footer>
 
 <dialog id="formDialog">
@@ -745,9 +852,27 @@
   </div>
 </dialog>
 
+</div>
+
 <script>
 (function(){
   "use strict";
+
+  // ---------- Firebase ----------
+  // Cole aqui as chaves do SEU projeto Firebase (Console → Configurações do projeto → Seus apps → SDK).
+  var firebaseConfig = {
+    apiKey: "COLOQUE_SUA_API_KEY_AQUI",
+    authDomain: "SEU-PROJETO.firebaseapp.com",
+    projectId: "SEU-PROJETO",
+    storageBucket: "SEU-PROJETO.appspot.com",
+    messagingSenderId: "000000000000",
+    appId: "1:000000000000:web:xxxxxxxxxxxxxxxxxxxxxxxx"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var auth = firebase.auth();
+  var firestoreDb = firebase.firestore();
+  var currentUser = null;
+  var syncTimer = null;
 
   var STORAGE_TX = "livrocaixa_transactions";
   var STORAGE_CAT = "livrocaixa_categories";
@@ -818,6 +943,23 @@
     }catch(e){
       console.error("Não foi possível salvar no localStorage.", e);
     }
+    scheduleCloudSync();
+  }
+
+  function scheduleCloudSync(){
+    if(!currentUser) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(function(){
+      firestoreDb.collection("financas").doc(currentUser.uid).set({
+        transactions: transactions,
+        categories: categories,
+        people: people,
+        theme: currentThemeKey,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, {merge: true}).catch(function(err){
+        console.error("Erro ao sincronizar com a nuvem:", err);
+      });
+    }, 600);
   }
 
   var transactions = loadJSON(STORAGE_TX, []);
@@ -1573,12 +1715,131 @@
     e.target.value = "";
   });
 
-  // ---------- init ----------
-  applyThemeVars(currentThemeKey);
-  renderThemePicker();
-  refreshCategorySelect();
-  refreshPersonSelect();
-  renderAll();
+  // ---------- autenticação ----------
+  var authMode = "login";
+  var authTabLogin = $("authTabLogin");
+  var authTabSignup = $("authTabSignup");
+  var authEmail = $("authEmail");
+  var authPassword = $("authPassword");
+  var authError = $("authError");
+  var authSubmitBtn = $("authSubmitBtn");
+
+  function setAuthMode(mode){
+    authMode = mode;
+    authTabLogin.classList.toggle("active", mode === "login");
+    authTabSignup.classList.toggle("active", mode === "signup");
+    authSubmitBtn.textContent = mode === "login" ? "Entrar" : "Criar conta";
+    hideAuthMessage();
+  }
+  authTabLogin.addEventListener("click", function(){ setAuthMode("login"); });
+  authTabSignup.addEventListener("click", function(){ setAuthMode("signup"); });
+
+  function showAuthMessage(msg, isSuccess){
+    authError.textContent = msg;
+    authError.className = "auth-error" + (isSuccess ? " success" : "");
+    authError.hidden = false;
+  }
+  function hideAuthMessage(){
+    authError.hidden = true;
+  }
+
+  function translateAuthError(err){
+    var map = {
+      "auth/invalid-email": "E-mail inválido.",
+      "auth/user-not-found": "Não existe conta com esse e-mail.",
+      "auth/wrong-password": "Senha incorreta.",
+      "auth/invalid-credential": "E-mail ou senha incorretos.",
+      "auth/email-already-in-use": "Já existe uma conta com esse e-mail. Tente entrar.",
+      "auth/weak-password": "A senha precisa ter pelo menos 6 caracteres.",
+      "auth/missing-password": "Digite uma senha.",
+      "auth/too-many-requests": "Muitas tentativas. Aguarde um pouco e tente de novo.",
+      "auth/invalid-api-key": "A configuração do Firebase no código ainda não foi preenchida com as chaves do seu projeto.",
+      "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "A configuração do Firebase no código ainda não foi preenchida com as chaves do seu projeto.",
+      "auth/configuration-not-found": "O login por e-mail/senha ainda não está ativado no seu projeto Firebase."
+    };
+    return map[err.code] || "Não foi possível concluir: " + err.message;
+  }
+
+  authSubmitBtn.addEventListener("click", function(){
+    hideAuthMessage();
+    var email = authEmail.value.trim();
+    var pass = authPassword.value;
+    if(!email || !pass){
+      showAuthMessage("Preencha e-mail e senha.");
+      return;
+    }
+    authSubmitBtn.disabled = true;
+    var action = authMode === "login"
+      ? auth.signInWithEmailAndPassword(email, pass)
+      : auth.createUserWithEmailAndPassword(email, pass);
+    action.catch(function(err){
+      showAuthMessage(translateAuthError(err));
+    }).finally(function(){
+      authSubmitBtn.disabled = false;
+    });
+  });
+
+  $("authResetLink").addEventListener("click", function(e){
+    e.preventDefault();
+    var email = authEmail.value.trim();
+    if(!email){
+      showAuthMessage("Digite seu e-mail acima e clique aqui de novo.");
+      return;
+    }
+    auth.sendPasswordResetEmail(email).then(function(){
+      showAuthMessage("Enviamos um e-mail para redefinir sua senha.", true);
+    }).catch(function(err){
+      showAuthMessage(translateAuthError(err));
+    });
+  });
+
+  $("logoutBtn").addEventListener("click", function(){
+    auth.signOut();
+  });
+
+  function loadCloudData(uid){
+    return firestoreDb.collection("financas").doc(uid).get().then(function(snap){
+      if(snap.exists){
+        var data = snap.data() || {};
+        if(Array.isArray(data.transactions)) transactions = data.transactions;
+        if(data.categories) categories = data.categories;
+        if(Array.isArray(data.people) && data.people.length) people = data.people;
+        if(data.theme && THEMES[data.theme]) currentThemeKey = data.theme;
+        try{
+          localStorage.setItem(STORAGE_TX, JSON.stringify(transactions));
+          localStorage.setItem(STORAGE_CAT, JSON.stringify(categories));
+          localStorage.setItem(STORAGE_PEOPLE, JSON.stringify(people));
+          localStorage.setItem(STORAGE_THEME, JSON.stringify(currentThemeKey));
+        }catch(e){}
+      } else {
+        scheduleCloudSync();
+      }
+    }).catch(function(err){
+      console.error("Erro ao carregar dados da nuvem:", err);
+    }).finally(function(){
+      applyThemeVars(currentThemeKey);
+      renderThemePicker();
+      refreshCategorySelect();
+      refreshPersonSelect();
+      renderAll();
+    });
+  }
+
+  auth.onAuthStateChanged(function(user){
+    if(user){
+      currentUser = user;
+      $("authScreen").style.display = "none";
+      $("appShell").style.display = "";
+      $("userBadge").textContent = user.email;
+      authPassword.value = "";
+      hideAuthMessage();
+      loadCloudData(user.uid);
+    } else {
+      currentUser = null;
+      $("appShell").style.display = "none";
+      $("authScreen").style.display = "flex";
+    }
+  });
 })();
 </script>
 </body>
