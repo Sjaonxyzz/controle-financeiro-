@@ -179,6 +179,35 @@
     align-items:center;
     gap:16px;
   }
+  .breakdown-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .breakdown-head h2{margin:0;}
+  .mini-toggle{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:999px;
+    overflow:hidden;
+    flex:none;
+  }
+  .mini-toggle button{
+    padding:4px 11px;
+    font-size:11px;
+    font-weight:600;
+    font-family:var(--sans);
+    background:transparent;
+    border:none;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .mini-toggle button.active{
+    background:var(--panel-2);
+    color:var(--paper);
+  }
   .donut svg{display:block;}
   .legend{
     width:100%;
@@ -731,18 +760,16 @@
     </div>
 
     <div class="breakdown">
-      <h2>Saídas por categoria</h2>
-      <div class="donut-wrap">
-        <div class="donut" id="breakdownDonut"></div>
-        <div class="legend" id="breakdownList"></div>
+      <div class="breakdown-head">
+        <h2>Por categoria</h2>
+        <div class="mini-toggle">
+          <button type="button" class="active" id="catBreakdownOutBtn" data-type="out">Saídas</button>
+          <button type="button" id="catBreakdownInBtn" data-type="in">Entradas</button>
+        </div>
       </div>
-    </div>
-
-    <div class="breakdown">
-      <h2>Entradas por categoria</h2>
       <div class="donut-wrap">
-        <div class="donut" id="incomeDonut"></div>
-        <div class="legend" id="incomeList"></div>
+        <div class="donut" id="categoryDonut"></div>
+        <div class="legend" id="categoryList"></div>
       </div>
     </div>
 
@@ -1541,10 +1568,25 @@
     $("totalIn").textContent = fmt.format(totalIn);
     $("totalOut").textContent = fmt.format(totalOut);
 
-    renderCategoryDonut("out", "breakdownDonut", "breakdownList", "saídas");
-    renderCategoryDonut("in", "incomeDonut", "incomeList", "entradas");
+    renderCategoryBreakdown();
     renderPeopleBreakdown();
   }
+
+  var categoryBreakdownType = "out";
+
+  function renderCategoryBreakdown(){
+    var label = categoryBreakdownType === "in" ? "entradas" : "saídas";
+    renderCategoryDonut(categoryBreakdownType, "categoryDonut", "categoryList", label);
+  }
+
+  function setCategoryBreakdownType(type){
+    categoryBreakdownType = type;
+    $("catBreakdownOutBtn").classList.toggle("active", type === "out");
+    $("catBreakdownInBtn").classList.toggle("active", type === "in");
+    renderCategoryBreakdown();
+  }
+  $("catBreakdownOutBtn").addEventListener("click", function(){ setCategoryBreakdownType("out"); });
+  $("catBreakdownInBtn").addEventListener("click", function(){ setCategoryBreakdownType("in"); });
 
   function renderPeopleBreakdown(){
     var byPerson = {};
