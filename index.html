@@ -104,12 +104,12 @@
     align-items:start;
   }
   aside{
-    padding:32px;
+    padding:26px 28px;
     border-right:1px solid var(--line);
     position:sticky;
     top:0;
   }
-  main{padding:32px;min-width:0;}
+  main{padding:26px 28px;min-width:0;}
 
   .balance-label{
     font-size:12px;
@@ -118,9 +118,9 @@
   }
   .balance-value{
     font-family:var(--serif);
-    font-size:44px;
+    font-size:40px;
     font-weight:500;
-    margin:0 0 24px;
+    margin:0;
     font-variant-numeric:tabular-nums;
     word-break:break-word;
   }
@@ -138,7 +138,7 @@
   .stat-row .amount.in{color:var(--income);}
   .stat-row .amount.out{color:var(--expense);}
 
-  .breakdown{margin-top:28px;}
+  .breakdown{margin-top:0;}
   .breakdown h2{
     font-family:var(--serif);
     font-weight:500;
@@ -241,20 +241,20 @@
   }
 
   .dashboard-section{
-    margin-bottom:32px;
-    padding-bottom:28px;
+    margin-bottom:20px;
+    padding-bottom:18px;
     border-bottom:1px solid var(--line);
   }
   .dashboard-section h2{
     font-family:var(--serif);
     font-weight:500;
-    font-size:20px;
-    margin:0 0 4px;
+    font-size:18px;
+    margin:0 0 3px;
   }
   .dashboard-section .sub{
     font-size:12px;
     color:var(--muted);
-    margin:0 0 16px;
+    margin:0 0 12px;
   }
   .chart-legend-row{
     display:flex;
@@ -286,7 +286,7 @@
     align-items:flex-start;
     justify-content:space-between;
     gap:16px;
-    margin-bottom:20px;
+    margin-bottom:14px;
     flex-wrap:wrap;
   }
   .month-nav{
@@ -296,8 +296,8 @@
   .month-nav .btn{padding:8px 14px;}
   .month-summary-stats{
     display:flex;
-    gap:32px;
-    margin-bottom:20px;
+    gap:28px;
+    margin-bottom:14px;
     flex-wrap:wrap;
   }
   .month-stat .label{
@@ -439,12 +439,12 @@
 
   /* ---------- visão geral (agora no main) ---------- */
   .overview-top{
-    margin-bottom:26px;
+    margin-bottom:16px;
   }
   .overview-mini-stats{
     display:flex;
-    gap:32px;
-    margin-top:14px;
+    gap:28px;
+    margin-top:8px;
   }
   .overview-mini-stats .mini-label{
     font-size:12px;
@@ -461,24 +461,26 @@
   .overview-mini-stats .mini-value.out{color:var(--expense);}
   .overview-grid{
     display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:40px;
+    grid-template-columns:repeat(auto-fit, minmax(220px, 360px));
+    justify-content:start;
+    gap:28px;
+    align-items:start;
   }
   @media (max-width:820px){
-    .overview-grid{grid-template-columns:1fr;gap:28px;}
+    .overview-grid{grid-template-columns:1fr;gap:22px;}
   }
 
   /* ---------- widgets da barra lateral (cartões/metas) ---------- */
   .tool-widget{
-    margin-bottom:28px;
-    padding-bottom:24px;
+    margin-bottom:18px;
+    padding-bottom:16px;
     border-bottom:1px solid var(--line);
   }
   .tool-widget-head{
     display:flex;
     align-items:center;
     justify-content:space-between;
-    margin-bottom:14px;
+    margin-bottom:10px;
   }
   .tool-widget-head h2{
     font-family:var(--serif);
@@ -508,8 +510,8 @@
     font-style:italic;
   }
   .card-item, .goal-item{
-    margin-bottom:14px;
-    padding:12px;
+    margin-bottom:10px;
+    padding:10px;
     border:1px solid var(--line);
     border-radius:6px;
     background:var(--panel-2);
@@ -521,7 +523,7 @@
     justify-content:space-between;
     align-items:center;
     gap:8px;
-    margin-bottom:9px;
+    margin-bottom:7px;
   }
   .card-item-head .name, .goal-item-head .name{
     font-size:13px;
