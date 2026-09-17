@@ -437,6 +437,127 @@
     gap:6px;
   }
 
+  /* ---------- visão geral (agora no main) ---------- */
+  .overview-top{
+    margin-bottom:26px;
+  }
+  .overview-mini-stats{
+    display:flex;
+    gap:32px;
+    margin-top:14px;
+  }
+  .overview-mini-stats .mini-label{
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 2px;
+  }
+  .overview-mini-stats .mini-value{
+    font-size:16px;
+    font-weight:700;
+    margin:0;
+    font-variant-numeric:tabular-nums;
+  }
+  .overview-mini-stats .mini-value.in{color:var(--income);}
+  .overview-mini-stats .mini-value.out{color:var(--expense);}
+  .overview-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:40px;
+  }
+  @media (max-width:820px){
+    .overview-grid{grid-template-columns:1fr;gap:28px;}
+  }
+
+  /* ---------- widgets da barra lateral (cartões/metas) ---------- */
+  .tool-widget{
+    margin-bottom:28px;
+    padding-bottom:24px;
+    border-bottom:1px solid var(--line);
+  }
+  .tool-widget-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .tool-widget-head h2{
+    font-family:var(--serif);
+    font-weight:500;
+    font-size:15px;
+    margin:0;
+  }
+  .icon-btn{
+    width:24px;
+    height:24px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--paper);
+    font-size:14px;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    padding:0;
+  }
+  .icon-btn:hover{border-color:var(--gold);}
+  .tool-empty{
+    font-size:12.5px;
+    color:var(--muted);
+    font-style:italic;
+  }
+  .card-item, .goal-item{
+    margin-bottom:14px;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--panel-2);
+    cursor:pointer;
+  }
+  .card-item:hover, .goal-item:hover{border-color:var(--gold);}
+  .card-item-head, .goal-item-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+    margin-bottom:9px;
+  }
+  .card-item-head .name, .goal-item-head .name{
+    font-size:13px;
+    font-weight:600;
+    color:var(--paper);
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .mini-bar-track{
+    height:6px;
+    background:var(--ink);
+    border-radius:2px;
+    overflow:hidden;
+    margin-bottom:8px;
+  }
+  .mini-bar-fill{
+    display:block;
+    height:100%;
+    border-radius:2px;
+  }
+  .card-item-foot, .goal-item-foot{
+    display:flex;
+    justify-content:space-between;
+    font-size:11.5px;
+    color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+  .goal-auto-field{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .goal-auto-field input{width:auto;flex:none;}
+  .goal-auto-field label{margin:0;font-size:12.5px;color:var(--muted);}
+
   /* ---------- filters ---------- */
   .main-head{
     display:flex;
@@ -747,35 +868,22 @@
 
 <div class="layout">
   <aside>
-    <p class="balance-label">Saldo atual</p>
-    <p class="balance-value" id="balanceValue">R$ 0,00</p>
-
-    <div class="stat-row">
-      <span>Entradas</span>
-      <span class="amount in" id="totalIn">R$ 0,00</span>
-    </div>
-    <div class="stat-row">
-      <span>Saídas</span>
-      <span class="amount out" id="totalOut">R$ 0,00</span>
-    </div>
-
-    <div class="breakdown">
-      <div class="breakdown-head">
-        <h2>Por categoria</h2>
-        <div class="mini-toggle">
-          <button type="button" class="active" id="catBreakdownOutBtn" data-type="out">Saídas</button>
-          <button type="button" id="catBreakdownInBtn" data-type="in">Entradas</button>
-        </div>
+    <div class="tool-widget">
+      <div class="tool-widget-head">
+        <h2>💳 Cartões</h2>
+        <button type="button" class="icon-btn" id="addCardBtn" title="Adicionar cartão">+</button>
       </div>
-      <div class="donut-wrap">
-        <div class="donut" id="categoryDonut"></div>
-        <div class="legend" id="categoryList"></div>
-      </div>
+      <div id="cardsList"></div>
+      <p class="tool-empty" id="cardsEmpty" hidden>Nenhum cartão cadastrado ainda.</p>
     </div>
 
-    <div class="breakdown">
-      <h2>Saldo por responsável</h2>
-      <div id="peopleBreakdownList"></div>
+    <div class="tool-widget">
+      <div class="tool-widget-head">
+        <h2>🎯 Metas</h2>
+        <button type="button" class="icon-btn" id="addGoalBtn" title="Adicionar meta">+</button>
+      </div>
+      <div id="goalsList"></div>
+      <p class="tool-empty" id="goalsEmpty" hidden>Nenhuma meta cadastrada ainda.</p>
     </div>
 
     <div class="theme-picker">
@@ -792,6 +900,43 @@
   </aside>
 
   <main>
+    <section class="dashboard-section overview-section">
+      <div class="overview-top">
+        <p class="balance-label">Saldo atual</p>
+        <p class="balance-value" id="balanceValue">R$ 0,00</p>
+        <div class="overview-mini-stats">
+          <div class="mini-stat">
+            <p class="mini-label">Entradas</p>
+            <p class="mini-value in" id="totalIn">R$ 0,00</p>
+          </div>
+          <div class="mini-stat">
+            <p class="mini-label">Saídas</p>
+            <p class="mini-value out" id="totalOut">R$ 0,00</p>
+          </div>
+        </div>
+      </div>
+      <div class="overview-grid">
+        <div class="breakdown">
+          <div class="breakdown-head">
+            <h2>Por categoria</h2>
+            <div class="mini-toggle">
+              <button type="button" class="active" id="catBreakdownOutBtn" data-type="out">Saídas</button>
+              <button type="button" id="catBreakdownInBtn" data-type="in">Entradas</button>
+            </div>
+          </div>
+          <div class="donut-wrap">
+            <div class="donut" id="categoryDonut"></div>
+            <div class="legend" id="categoryList"></div>
+          </div>
+        </div>
+
+        <div class="breakdown">
+          <h2>Saldo por responsável</h2>
+          <div id="peopleBreakdownList"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="dashboard-section month-summary">
       <div class="month-summary-head">
         <div>
@@ -967,6 +1112,67 @@
   </div>
 </dialog>
 
+<dialog id="cardDialog">
+  <div class="dialog-inner">
+    <h3 id="cardDialogTitle">Novo cartão</h3>
+    <form id="cardForm">
+      <input type="hidden" id="cardId">
+      <div class="field">
+        <label for="cardName">Nome do cartão</label>
+        <input type="text" id="cardName" required placeholder="Ex.: Nubank, Inter...">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="cardLimit">Limite (R$)</label>
+          <input type="number" id="cardLimit" step="0.01" min="0" required>
+        </div>
+        <div class="field">
+          <label for="cardUsed">Valor usado (R$)</label>
+          <input type="number" id="cardUsed" step="0.01" min="0" value="0">
+        </div>
+      </div>
+      <p class="tool-empty" style="margin:-6px 0 6px;">Atualize o "valor usado" sempre que quiser, conforme a sua fatura.</p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="deleteCardBtn" hidden style="margin-right:auto;">Excluir</button>
+        <button type="button" class="btn" id="cancelCardBtn">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="goalDialog">
+  <div class="dialog-inner">
+    <h3 id="goalDialogTitle">Nova meta</h3>
+    <form id="goalForm">
+      <input type="hidden" id="goalId">
+      <div class="field">
+        <label for="goalName">Nome da meta</label>
+        <input type="text" id="goalName" required placeholder="Ex.: Economizar este mês, Reserva de emergência...">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="goalTarget">Valor alvo (R$)</label>
+          <input type="number" id="goalTarget" step="0.01" min="0" required>
+        </div>
+        <div class="field">
+          <label for="goalCurrent">Valor atual (R$)</label>
+          <input type="number" id="goalCurrent" step="0.01" min="0" value="0">
+        </div>
+      </div>
+      <div class="field goal-auto-field">
+        <input type="checkbox" id="goalAutoTrack">
+        <label for="goalAutoTrack">Acompanhar automaticamente pelo saldo deste mês</label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="deleteGoalBtn" hidden style="margin-right:auto;">Excluir</button>
+        <button type="button" class="btn" id="cancelGoalBtn">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
 <dialog id="peopleDialog">
   <div class="dialog-inner">
     <h3>Gerenciar responsáveis</h3>
@@ -1009,6 +1215,8 @@
   var STORAGE_CAT = "livrocaixa_categories";
   var STORAGE_THEME = "livrocaixa_theme";
   var STORAGE_PEOPLE = "livrocaixa_people";
+  var STORAGE_CARDS = "livrocaixa_cards";
+  var STORAGE_GOALS = "livrocaixa_goals";
 
   var defaultCategories = {
     in: ["Salário", "Freelance", "Investimentos", "Outros"],
@@ -1085,6 +1293,8 @@
         transactions: transactions,
         categories: categories,
         people: people,
+        cards: cards,
+        goals: goals,
         theme: currentThemeKey,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, {merge: true}).catch(function(err){
@@ -1097,6 +1307,10 @@
   var categories = loadJSON(STORAGE_CAT, defaultCategories);
   var people = loadJSON(STORAGE_PEOPLE, defaultPeople);
   if(!Array.isArray(people) || !people.length) people = defaultPeople.slice();
+  var cards = loadJSON(STORAGE_CARDS, []);
+  var goals = loadJSON(STORAGE_GOALS, []);
+  if(!Array.isArray(cards)) cards = [];
+  if(!Array.isArray(goals)) goals = [];
 
   var currentType = "out";
   var editingId = null;
@@ -1810,15 +2024,12 @@
     return {key: key, label: label, year: d.getFullYear(), month: d.getMonth()};
   }
 
-  function renderMonthSummary(){
-    var info = monthInfoFromOffset(summaryMonthOffset);
-    $("monthSummaryLabel").textContent = info.label + (summaryMonthOffset === 0 ? " (este mês)" : "");
-    $("todayMonthBtn").disabled = summaryMonthOffset === 0;
-
+  function getMonthTotals(offsetOrKey){
+    var key = typeof offsetOrKey === "string" ? offsetOrKey : monthInfoFromOffset(offsetOrKey).key;
     var inc = 0, out = 0;
     var byCat = {};
     transactions.forEach(function(t){
-      if(t.date.slice(0, 7) !== info.key) return;
+      if(t.date.slice(0, 7) !== key) return;
       if(t.type === "in"){
         inc += t.amount;
       } else {
@@ -1826,6 +2037,16 @@
         byCat[t.category] = (byCat[t.category] || 0) + t.amount;
       }
     });
+    return {income: inc, expense: out, balance: inc - out, byCat: byCat};
+  }
+
+  function renderMonthSummary(){
+    var info = monthInfoFromOffset(summaryMonthOffset);
+    $("monthSummaryLabel").textContent = info.label + (summaryMonthOffset === 0 ? " (este mês)" : "");
+    $("todayMonthBtn").disabled = summaryMonthOffset === 0;
+
+    var totals = getMonthTotals(info.key);
+    var inc = totals.income, out = totals.expense, byCat = totals.byCat;
 
     $("monthSummaryIn").textContent = fmt.format(inc);
     $("monthSummaryOut").textContent = fmt.format(out);
@@ -1885,8 +2106,153 @@
     renderSummary();
     renderMonthlyChart();
     renderMonthSummary();
+    renderCards();
+    renderGoals();
     renderLedger();
   }
+
+  // ---------- cartões ----------
+  var editingCardId = null;
+  var cardDialog = $("cardDialog");
+  var cardForm = $("cardForm");
+
+  function renderCards(){
+    var wrap = $("cardsList");
+    wrap.innerHTML = "";
+    $("cardsEmpty").hidden = cards.length > 0;
+    var theme = getTheme();
+    cards.forEach(function(card){
+      var pct = card.limit > 0 ? Math.min(100, Math.round(card.used / card.limit * 100)) : 0;
+      var color = pct >= 90 ? theme.expense : (pct >= 70 ? theme.gold : theme.income);
+      var el = document.createElement("div");
+      el.className = "card-item";
+      el.innerHTML =
+        '<div class="card-item-head"><span class="name">' + escapeHtml(card.name) + '</span></div>' +
+        '<div class="mini-bar-track"><span class="mini-bar-fill" style="width:' + pct + '%;background:' + color + '"></span></div>' +
+        '<div class="card-item-foot"><span>Usado: ' + fmt.format(card.used) + '</span><span>Limite: ' + fmt.format(card.limit) + '</span></div>';
+      el.addEventListener("click", function(){ openCardForm(card); });
+      wrap.appendChild(el);
+    });
+  }
+
+  function openCardForm(existing){
+    cardForm.reset();
+    if(existing){
+      $("cardId").value = existing.id;
+      $("cardDialogTitle").textContent = "Editar cartão";
+      $("cardName").value = existing.name;
+      $("cardLimit").value = existing.limit;
+      $("cardUsed").value = existing.used;
+      $("deleteCardBtn").hidden = false;
+      editingCardId = existing.id;
+    } else {
+      $("cardDialogTitle").textContent = "Novo cartão";
+      $("deleteCardBtn").hidden = true;
+      editingCardId = null;
+    }
+    cardDialog.showModal();
+  }
+
+  $("addCardBtn").addEventListener("click", function(){ openCardForm(null); });
+  $("cancelCardBtn").addEventListener("click", function(){ cardDialog.close(); });
+  $("deleteCardBtn").addEventListener("click", function(){
+    if(!editingCardId) return;
+    cards = cards.filter(function(c){ return c.id !== editingCardId; });
+    saveJSON(STORAGE_CARDS, cards);
+    cardDialog.close();
+    renderCards();
+  });
+  cardForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var record = {
+      id: editingCardId || uid(),
+      name: $("cardName").value.trim(),
+      limit: Math.round(parseFloat($("cardLimit").value || "0") * 100) / 100,
+      used: Math.round(parseFloat($("cardUsed").value || "0") * 100) / 100
+    };
+    if(!record.name || !record.limit){ return; }
+    if(editingCardId){
+      cards = cards.map(function(c){ return c.id === editingCardId ? record : c; });
+    } else {
+      cards.push(record);
+    }
+    saveJSON(STORAGE_CARDS, cards);
+    cardDialog.close();
+    renderCards();
+  });
+
+  // ---------- metas ----------
+  var editingGoalId = null;
+  var goalDialog = $("goalDialog");
+  var goalForm = $("goalForm");
+
+  function renderGoals(){
+    var wrap = $("goalsList");
+    wrap.innerHTML = "";
+    $("goalsEmpty").hidden = goals.length > 0;
+    var theme = getTheme();
+    goals.forEach(function(goal){
+      var current = goal.autoTrack ? Math.max(0, getMonthTotals(0).balance) : (goal.current || 0);
+      var pct = goal.target > 0 ? Math.min(100, Math.round(current / goal.target * 100)) : 0;
+      var color = pct >= 100 ? theme.income : theme.gold;
+      var el = document.createElement("div");
+      el.className = "goal-item";
+      el.innerHTML =
+        '<div class="goal-item-head"><span class="name">' + escapeHtml(goal.name) + (goal.autoTrack ? ' 🔁' : '') + '</span></div>' +
+        '<div class="mini-bar-track"><span class="mini-bar-fill" style="width:' + pct + '%;background:' + color + '"></span></div>' +
+        '<div class="goal-item-foot"><span>' + fmt.format(current) + ' de ' + fmt.format(goal.target) + '</span><span>' + pct + '%</span></div>';
+      el.addEventListener("click", function(){ openGoalForm(goal); });
+      wrap.appendChild(el);
+    });
+  }
+
+  function openGoalForm(existing){
+    goalForm.reset();
+    if(existing){
+      $("goalId").value = existing.id;
+      $("goalDialogTitle").textContent = "Editar meta";
+      $("goalName").value = existing.name;
+      $("goalTarget").value = existing.target;
+      $("goalCurrent").value = existing.current || 0;
+      $("goalAutoTrack").checked = !!existing.autoTrack;
+      $("deleteGoalBtn").hidden = false;
+      editingGoalId = existing.id;
+    } else {
+      $("goalDialogTitle").textContent = "Nova meta";
+      $("deleteGoalBtn").hidden = true;
+      editingGoalId = null;
+    }
+    goalDialog.showModal();
+  }
+
+  $("addGoalBtn").addEventListener("click", function(){ openGoalForm(null); });
+  $("cancelGoalBtn").addEventListener("click", function(){ goalDialog.close(); });
+  $("deleteGoalBtn").addEventListener("click", function(){
+    if(!editingGoalId) return;
+    goals = goals.filter(function(g){ return g.id !== editingGoalId; });
+    saveJSON(STORAGE_GOALS, goals);
+    goalDialog.close();
+    renderGoals();
+  });
+  goalForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var record = {
+      id: editingGoalId || uid(),
+      name: $("goalName").value.trim(),
+      target: Math.round(parseFloat($("goalTarget").value || "0") * 100) / 100,
+      current: Math.round(parseFloat($("goalCurrent").value || "0") * 100) / 100,
+      autoTrack: $("goalAutoTrack").checked
+    };
+    if(!record.name || !record.target){ return; }
+    if(editingGoalId){
+      goals = goals.map(function(g){ return g.id === editingGoalId ? record : g; });
+    } else {
+      goals.push(record);
+    }
+    saveJSON(STORAGE_GOALS, goals);
+    goalDialog.close();
+    renderGoals();
+  });
 
   // ---------- backup / export ----------
   function download(filename, content, mime){
@@ -1902,7 +2268,7 @@
   }
 
   $("exportBtn").addEventListener("click", function(){
-    var data = {transactions: transactions, categories: categories, people: people};
+    var data = {transactions: transactions, categories: categories, people: people, cards: cards, goals: goals};
     download("financas-backup.json", JSON.stringify(data, null, 2), "application/json");
   });
 
@@ -1935,6 +2301,14 @@
         if(Array.isArray(data.people) && data.people.length){
           people = data.people;
           saveJSON(STORAGE_PEOPLE, people);
+        }
+        if(Array.isArray(data.cards)){
+          cards = data.cards;
+          saveJSON(STORAGE_CARDS, cards);
+        }
+        if(Array.isArray(data.goals)){
+          goals = data.goals;
+          saveJSON(STORAGE_GOALS, goals);
         }
         renderAll();
       }catch(err){
@@ -2034,11 +2408,15 @@
         if(Array.isArray(data.transactions)) transactions = data.transactions;
         if(data.categories) categories = data.categories;
         if(Array.isArray(data.people) && data.people.length) people = data.people;
+        if(Array.isArray(data.cards)) cards = data.cards;
+        if(Array.isArray(data.goals)) goals = data.goals;
         if(data.theme && THEMES[data.theme]) currentThemeKey = data.theme;
         try{
           localStorage.setItem(STORAGE_TX, JSON.stringify(transactions));
           localStorage.setItem(STORAGE_CAT, JSON.stringify(categories));
           localStorage.setItem(STORAGE_PEOPLE, JSON.stringify(people));
+          localStorage.setItem(STORAGE_CARDS, JSON.stringify(cards));
+          localStorage.setItem(STORAGE_GOALS, JSON.stringify(goals));
           localStorage.setItem(STORAGE_THEME, JSON.stringify(currentThemeKey));
         }catch(e){}
       } else {
