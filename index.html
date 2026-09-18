@@ -2070,6 +2070,7 @@
     var info = monthInfoFromOffset(summaryMonthOffset);
     $("monthSummaryLabel").textContent = info.label + (summaryMonthOffset === 0 ? " (este mês)" : "");
     $("todayMonthBtn").disabled = summaryMonthOffset === 0;
+    $("todayMonthBtn").textContent = summaryMonthOffset === 0 ? "Hoje" : "Voltar para hoje";
 
     var totals = getMonthTotals(info.key);
     var inc = totals.income, out = totals.expense, byCat = totals.byCat;
