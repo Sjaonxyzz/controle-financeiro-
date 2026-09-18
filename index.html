@@ -138,6 +138,21 @@
     margin:0 0 12px;
   }
 
+  .month-row{
+    display:grid;
+    grid-template-columns:1fr 300px;
+    gap:20px;
+    align-items:start;
+  }
+  .side-tools{
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+  }
+  @media (max-width:1000px){
+    .month-row{grid-template-columns:1fr;}
+  }
+
   .balance-label{
     font-size:12px;
     color:var(--muted);
@@ -928,24 +943,6 @@
     </div>
 
     <div class="panel">
-      <div class="tool-widget-head">
-        <h2>💳 Cartões</h2>
-        <button type="button" class="icon-btn" id="addCardBtn" title="Adicionar cartão">+</button>
-      </div>
-      <div id="cardsList"></div>
-      <p class="tool-empty" id="cardsEmpty" hidden>Nenhum cartão cadastrado ainda.</p>
-    </div>
-
-    <div class="panel">
-      <div class="tool-widget-head">
-        <h2>🎯 Metas</h2>
-        <button type="button" class="icon-btn" id="addGoalBtn" title="Adicionar meta">+</button>
-      </div>
-      <div id="goalsList"></div>
-      <p class="tool-empty" id="goalsEmpty" hidden>Nenhuma meta cadastrada ainda.</p>
-    </div>
-
-    <div class="panel">
       <h2 class="panel-title">Paleta de cores</h2>
       <div class="theme-swatches" id="themeSwatches"></div>
     </div>
@@ -961,34 +958,56 @@
   </aside>
 
   <main>
-    <div class="panel dashboard-section month-summary">
-      <div class="month-summary-head">
-        <div>
-          <h2>Resumo do mês</h2>
-          <p class="sub" id="monthSummaryLabel">—</p>
+    <div class="month-row">
+      <div class="panel dashboard-section month-summary">
+        <div class="month-summary-head">
+          <div>
+            <h2>Resumo do mês</h2>
+            <p class="sub" id="monthSummaryLabel">—</p>
+          </div>
+          <div class="month-nav">
+            <button type="button" class="btn btn-ghost" id="prevMonthBtn" aria-label="Mês anterior">‹</button>
+            <button type="button" class="btn btn-ghost" id="todayMonthBtn">Hoje</button>
+            <button type="button" class="btn btn-ghost" id="nextMonthBtn" aria-label="Próximo mês">›</button>
+          </div>
         </div>
-        <div class="month-nav">
-          <button type="button" class="btn btn-ghost" id="prevMonthBtn" aria-label="Mês anterior">‹</button>
-          <button type="button" class="btn btn-ghost" id="todayMonthBtn">Hoje</button>
-          <button type="button" class="btn btn-ghost" id="nextMonthBtn" aria-label="Próximo mês">›</button>
+        <div class="month-summary-stats">
+          <div class="month-stat">
+            <p class="label">Entradas</p>
+            <p class="value in" id="monthSummaryIn">R$ 0,00</p>
+          </div>
+          <div class="month-stat">
+            <p class="label">Saídas</p>
+            <p class="value out" id="monthSummaryOut">R$ 0,00</p>
+          </div>
+          <div class="month-stat">
+            <p class="label">Saldo do mês</p>
+            <p class="value" id="monthSummaryBalance">R$ 0,00</p>
+          </div>
+        </div>
+        <div class="month-summary-cats" id="monthSummaryCats"></div>
+        <button type="button" class="btn btn-ghost" id="viewMonthLedgerBtn">Ver lançamentos deste mês →</button>
+      </div>
+
+      <div class="side-tools">
+        <div class="panel">
+          <div class="tool-widget-head">
+            <h2>Cartões</h2>
+            <button type="button" class="icon-btn" id="addCardBtn" title="Adicionar cartão">+</button>
+          </div>
+          <div id="cardsList"></div>
+          <p class="tool-empty" id="cardsEmpty" hidden>Nenhum cartão cadastrado ainda.</p>
+        </div>
+
+        <div class="panel">
+          <div class="tool-widget-head">
+            <h2>Metas</h2>
+            <button type="button" class="icon-btn" id="addGoalBtn" title="Adicionar meta">+</button>
+          </div>
+          <div id="goalsList"></div>
+          <p class="tool-empty" id="goalsEmpty" hidden>Nenhuma meta cadastrada ainda.</p>
         </div>
       </div>
-      <div class="month-summary-stats">
-        <div class="month-stat">
-          <p class="label">Entradas</p>
-          <p class="value in" id="monthSummaryIn">R$ 0,00</p>
-        </div>
-        <div class="month-stat">
-          <p class="label">Saídas</p>
-          <p class="value out" id="monthSummaryOut">R$ 0,00</p>
-        </div>
-        <div class="month-stat">
-          <p class="label">Saldo do mês</p>
-          <p class="value" id="monthSummaryBalance">R$ 0,00</p>
-        </div>
-      </div>
-      <div class="month-summary-cats" id="monthSummaryCats"></div>
-      <button type="button" class="btn btn-ghost" id="viewMonthLedgerBtn">Ver lançamentos deste mês →</button>
     </div>
 
     <div class="panel dashboard-section">
