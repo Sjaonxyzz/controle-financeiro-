@@ -677,6 +677,10 @@
     border:1px solid var(--line);
     color:var(--muted);
   }
+  .card-chip{
+    border-color:var(--gold);
+    color:var(--gold);
+  }
   .row-del{
     background:none;
     border:none;
@@ -1036,6 +1040,9 @@
           <select id="filterPerson">
             <option value="all">Todos os responsáveis</option>
           </select>
+          <select id="filterCard">
+            <option value="all">Todos os cartões</option>
+          </select>
           <select id="filterMonth">
             <option value="all">Todos os meses</option>
           </select>
@@ -1120,6 +1127,13 @@
         </div>
       </div>
 
+      <div class="field">
+        <label for="txCard">Cartão</label>
+        <select id="txCard">
+          <option value="">Nenhum (dinheiro/Pix/débito)</option>
+        </select>
+      </div>
+
       <div class="dialog-actions">
         <button type="button" class="btn" id="deleteTxBtn" hidden style="margin-right:auto;">Excluir</button>
         <button type="button" class="btn" id="cancelFormBtn">Cancelar</button>
@@ -1172,11 +1186,11 @@
           <input type="number" id="cardLimit" step="0.01" min="0" required>
         </div>
         <div class="field">
-          <label for="cardUsed">Valor usado (R$)</label>
+          <label for="cardUsed">Outros gastos não lançados aqui (R$)</label>
           <input type="number" id="cardUsed" step="0.01" min="0" value="0">
         </div>
       </div>
-      <p class="tool-empty" style="margin:-6px 0 6px;">Atualize o "valor usado" sempre que quiser, conforme a sua fatura.</p>
+      <p class="tool-empty" id="cardComputedHint" style="margin:-6px 0 6px;">Lançamentos com este cartão são somados automaticamente. Use o campo acima só para algo que já estava usado antes de começar a lançar aqui.</p>
       <div class="dialog-actions">
         <button type="button" class="btn" id="deleteCardBtn" hidden style="margin-right:auto;">Excluir</button>
         <button type="button" class="btn" id="cancelCardBtn">Cancelar</button>
@@ -1515,6 +1529,19 @@
     if(current && people.indexOf(current) !== -1) txPerson.value = current;
   }
 
+  var txCard = $("txCard");
+  function refreshCardSelect(){
+    var current = txCard.value;
+    txCard.innerHTML = '<option value="">Nenhum (dinheiro/Pix/débito)</option>';
+    cards.forEach(function(card){
+      var opt = document.createElement("option");
+      opt.value = card.id;
+      opt.textContent = card.name;
+      txCard.appendChild(opt);
+    });
+    if(current && cards.some(function(c){ return c.id === current; })) txCard.value = current;
+  }
+
   txPerson.addEventListener("change", function(){
     if(txPerson.value === "__add__"){
       newPersonRow.hidden = false;
@@ -1682,6 +1709,7 @@
       if(match.person && people.indexOf(match.person) !== -1){
         txPerson.value = match.person;
       }
+      txCard.value = match.card && cards.some(function(c){ return c.id === match.card; }) ? match.card : "";
       if(!txAmount.value){
         txAmount.value = match.amount;
       }
@@ -1699,6 +1727,7 @@
     newCatRow.hidden = true;
     newPersonRow.hidden = true;
     refreshPersonSelect();
+    refreshCardSelect();
     if(existing){
       editingId = existing.id;
       dialogTitle.textContent = "Editar lançamento";
@@ -1712,12 +1741,14 @@
       if(existing.person && people.indexOf(existing.person) !== -1){
         txPerson.value = existing.person;
       }
+      txCard.value = existing.card && cards.some(function(c){ return c.id === existing.card; }) ? existing.card : "";
     } else {
       editingId = null;
       dialogTitle.textContent = "Novo lançamento";
       deleteTxBtn.hidden = true;
       setType("out");
       txDate.value = todayISO();
+      txCard.value = "";
     }
     refreshDescSuggestions();
     formDialog.showModal();
@@ -1744,6 +1775,7 @@
       description: txDesc.value.trim(),
       category: catValue,
       person: personValue,
+      card: txCard.value || "",
       amount: Math.round(parseFloat(txAmount.value || "0") * 100) / 100,
       date: txDate.value
     };
@@ -1764,10 +1796,11 @@
   var filterType = $("filterType");
   var filterCategory = $("filterCategory");
   var filterPerson = $("filterPerson");
+  var filterCard = $("filterCard");
   var filterMonth = $("filterMonth");
   var filterDateFrom = $("filterDateFrom");
   var filterDateTo = $("filterDateTo");
-  [filterSearch, filterType, filterCategory, filterPerson, filterMonth, filterDateFrom, filterDateTo].forEach(function(el){
+  [filterSearch, filterType, filterCategory, filterPerson, filterCard, filterMonth, filterDateFrom, filterDateTo].forEach(function(el){
     el.addEventListener("input", renderLedger);
     el.addEventListener("change", renderLedger);
   });
@@ -1777,6 +1810,7 @@
     filterType.value = "all";
     filterCategory.value = "all";
     filterPerson.value = "all";
+    filterCard.value = "all";
     filterMonth.value = "all";
     filterDateFrom.value = "";
     filterDateTo.value = "";
@@ -1807,6 +1841,22 @@
       filterPerson.appendChild(opt);
     });
     if(people.indexOf(prevPerson) !== -1) filterPerson.value = prevPerson;
+
+    var prevCard = filterCard.value;
+    filterCard.innerHTML = '<option value="all">Todos os cartões</option>';
+    cards.forEach(function(card){
+      var opt = document.createElement("option");
+      opt.value = card.id;
+      opt.textContent = card.name;
+      filterCard.appendChild(opt);
+    });
+    if(transactions.some(function(t){ return !t.card; })){
+      var noneOpt = document.createElement("option");
+      noneOpt.value = "__none__";
+      noneOpt.textContent = "Sem cartão";
+      filterCard.appendChild(noneOpt);
+    }
+    if(cards.some(function(c){ return c.id === prevCard; }) || prevCard === "__none__") filterCard.value = prevCard;
 
     var months = {};
     transactions.forEach(function(t){ months[t.date.slice(0,7)] = true; });
@@ -2025,6 +2075,7 @@
     var type = filterType.value;
     var cat = filterCategory.value;
     var person = filterPerson.value;
+    var card = filterCard.value;
     var month = filterMonth.value;
     var dateFrom = filterDateFrom.value;
     var dateTo = filterDateTo.value;
@@ -2033,6 +2084,8 @@
       if(type !== "all" && t.type !== type) return false;
       if(cat !== "all" && t.category !== cat) return false;
       if(person !== "all" && t.person !== person) return false;
+      if(card === "__none__" && t.card) return false;
+      if(card !== "all" && card !== "__none__" && t.card !== card) return false;
       if(month !== "all" && t.date.slice(0,7) !== month) return false;
       if(dateFrom && t.date < dateFrom) return false;
       if(dateTo && t.date > dateTo) return false;
@@ -2045,10 +2098,17 @@
 
     rows.forEach(function(t){
       var tr = document.createElement("tr");
+      var cardTag = "";
+      if(t.card){
+        var cardObj = cards.filter(function(c){ return c.id === t.card; })[0];
+        if(cardObj){
+          cardTag = ' <span class="cat-chip card-chip">' + escapeHtml(cardObj.name) + '</span>';
+        }
+      }
       tr.innerHTML =
         '<td>' + dateFmt.format(new Date(t.date + "T00:00:00Z")) + '</td>' +
         '<td>' + escapeHtml(t.description) + '</td>' +
-        '<td><span class="cat-chip">' + escapeHtml(t.category) + '</span></td>' +
+        '<td><span class="cat-chip">' + escapeHtml(t.category) + '</span>' + cardTag + '</td>' +
         '<td><span class="cat-chip">' + escapeHtml(t.person || "—") + '</span></td>' +
         '<td class="num ' + t.type + '">' + (t.type === "in" ? "+ " : "− ") + fmt.format(t.amount) + '</td>' +
         '<td><button class="row-del" title="Excluir" data-id="' + t.id + '">✕</button></td>';
@@ -2172,23 +2232,39 @@
   var cardDialog = $("cardDialog");
   var cardForm = $("cardForm");
 
+  function cardLinkedTotal(cardId){
+    var total = 0;
+    transactions.forEach(function(t){
+      if(t.card !== cardId) return;
+      if(t.type === "out") total += t.amount;
+      else total -= t.amount;
+    });
+    return total;
+  }
+
+  function cardUsedTotal(card){
+    return Math.max(0, (card.used || 0) + cardLinkedTotal(card.id));
+  }
+
   function renderCards(){
     var wrap = $("cardsList");
     wrap.innerHTML = "";
     $("cardsEmpty").hidden = cards.length > 0;
     var theme = getTheme();
     cards.forEach(function(card){
-      var pct = card.limit > 0 ? Math.min(100, Math.round(card.used / card.limit * 100)) : 0;
+      var usedTotal = cardUsedTotal(card);
+      var pct = card.limit > 0 ? Math.min(100, Math.round(usedTotal / card.limit * 100)) : 0;
       var color = pct >= 90 ? theme.expense : (pct >= 70 ? theme.gold : theme.income);
       var el = document.createElement("div");
       el.className = "card-item";
       el.innerHTML =
         '<div class="card-item-head"><span class="name">' + escapeHtml(card.name) + '</span></div>' +
         '<div class="mini-bar-track"><span class="mini-bar-fill" style="width:' + pct + '%;background:' + color + '"></span></div>' +
-        '<div class="card-item-foot"><span>Usado: ' + fmt.format(card.used) + '</span><span>Limite: ' + fmt.format(card.limit) + '</span></div>';
+        '<div class="card-item-foot"><span>Usado: ' + fmt.format(usedTotal) + '</span><span>Limite: ' + fmt.format(card.limit) + '</span></div>';
       el.addEventListener("click", function(){ openCardForm(card); });
       wrap.appendChild(el);
     });
+    if(typeof refreshCardSelect === "function") refreshCardSelect();
   }
 
   function openCardForm(existing){
@@ -2201,10 +2277,13 @@
       $("cardUsed").value = existing.used;
       $("deleteCardBtn").hidden = false;
       editingCardId = existing.id;
+      var linked = cardLinkedTotal(existing.id);
+      $("cardComputedHint").textContent = "Lançamentos com este cartão somam " + fmt.format(linked) + " até agora, somados automaticamente. Total usado: " + fmt.format(cardUsedTotal(existing)) + ".";
     } else {
       $("cardDialogTitle").textContent = "Novo cartão";
       $("deleteCardBtn").hidden = true;
       editingCardId = null;
+      $("cardComputedHint").textContent = "Lançamentos com este cartão são somados automaticamente. Use o campo acima só para algo que já estava usado antes de começar a lançar aqui.";
     }
     cardDialog.showModal();
   }
@@ -2329,11 +2408,12 @@
   });
 
   $("exportCsvBtn").addEventListener("click", function(){
-    var header = "data,tipo,descricao,categoria,responsavel,valor\n";
+    var header = "data,tipo,descricao,categoria,responsavel,cartao,valor\n";
     var rows = transactions.map(function(t){
       var tipo = t.type === "in" ? "entrada" : "saida";
       var desc = '"' + t.description.replace(/"/g,'""') + '"';
-      return [t.date, tipo, desc, t.category, t.person || "", t.amount.toFixed(2)].join(",");
+      var cardObj = t.card ? cards.filter(function(c){ return c.id === t.card; })[0] : null;
+      return [t.date, tipo, desc, t.category, t.person || "", cardObj ? cardObj.name : "", t.amount.toFixed(2)].join(",");
     });
     download("financas.csv", header + rows.join("\n"), "text/csv");
   });
@@ -2485,6 +2565,7 @@
       renderThemePicker();
       refreshCategorySelect();
       refreshPersonSelect();
+      refreshCardSelect();
       renderAll();
     });
   }
