@@ -559,6 +559,17 @@
     background:var(--panel-2);
     cursor:pointer;
   }
+  #cardsList, #goalsList{
+    max-height:270px;
+    overflow-y:auto;
+    padding-right:4px;
+    margin-right:-4px;
+  }
+  #cardsList::-webkit-scrollbar, #goalsList::-webkit-scrollbar{width:6px;}
+  #cardsList::-webkit-scrollbar-thumb, #goalsList::-webkit-scrollbar-thumb{
+    background:var(--line);
+    border-radius:3px;
+  }
   .card-item:hover, .goal-item:hover{border-color:var(--gold);}
   .card-item-head, .goal-item-head{
     display:flex;
