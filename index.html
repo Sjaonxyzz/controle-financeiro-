@@ -1246,6 +1246,10 @@
         <label for="cardName">Nome do cartão</label>
         <input type="text" id="cardName" required placeholder="Ex.: Nubank, Inter...">
       </div>
+      <div class="field">
+        <label for="cardOwner">Responsável padrão deste cartão</label>
+        <select id="cardOwner"></select>
+      </div>
       <div class="field-row">
         <div class="field">
           <label for="cardLimit">Limite (R$)</label>
@@ -2371,8 +2375,21 @@
     if(typeof refreshCardSelect === "function") refreshCardSelect();
   }
 
+  function refreshCardOwnerSelect(selected){
+    var sel = $("cardOwner");
+    sel.innerHTML = "";
+    people.forEach(function(name){
+      var opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+    if(selected && people.indexOf(selected) !== -1) sel.value = selected;
+  }
+
   function openCardForm(existing){
     cardForm.reset();
+    refreshCardOwnerSelect(existing && existing.owner);
     if(existing){
       $("cardId").value = existing.id;
       $("cardDialogTitle").textContent = "Editar cartão";
@@ -2408,6 +2425,7 @@
     var record = {
       id: editingCardId || uid(),
       name: $("cardName").value.trim(),
+      owner: $("cardOwner").value || people[0],
       limit: Math.round(parseFloat($("cardLimit").value || "0") * 100) / 100,
       used: Math.round(parseFloat($("cardUsed").value || "0") * 100) / 100
     };
@@ -2533,7 +2551,7 @@
     var dateSlashRe = /^\s*(\d{2})\/(\d{2})(?:\/(\d{2,4}))?/;
     var dateNameRe = /^\s*(\d{2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i;
     var valueRe = /(-?\s?R?\$?\s?\d{1,3}(?:\.\d{3})*,\d{2})\s*-?\s*$/;
-    var skipWords = /^(saldo|total|limite|subtotal|encargos|iof|juros)\b/i;
+    var skipWords = /^(saldo|total|limite|subtotal|encargos|iof|juros|pagamento|fatura anterior)\b/i;
     var results = [];
 
     lines.forEach(function(line){
@@ -2594,10 +2612,36 @@
     }).join("");
   }
 
+  var CATEGORY_KEYWORDS = [
+    {match: /ifood|restaurante|lanchonete|padaria|supermerc|mercado|hortifruti|acougue|mercearia|pizza|sorveteria|hamburgu|cafe\b/i, guess: "alimenta"},
+    {match: /uber|99app|99\*|posto|combust|estacionamento|pedagio|taxi|metro\b|onibus/i, guess: "transport"},
+    {match: /farmacia|drogaria|clinic|hospital|laborat|dentist|medic|saude/i, guess: "sa\u00fade"},
+    {match: /netflix|spotify|cinema|ingresso|steam|playstation|xbox|disney|hbo|prime video/i, guess: "lazer"},
+    {match: /riachuelo|renner|zara|c&a|magazine|amazon|shopee|mercadolivre|shopping|loja/i, guess: "lazer"},
+    {match: /luz\b|energia|copel|cemig|enel|agua\b|sabesp|condominio|aluguel|internet|claro|vivo|tim\b|oi\b|net\b/i, guess: "moradia"},
+    {match: /escola|faculdade|curso|udemy|alura|livro/i, guess: "educa"}
+  ];
+
+  function guessCategory(desc, type){
+    var list = type === "in" ? categories.in : categories.out;
+    for(var i = 0; i < CATEGORY_KEYWORDS.length; i++){
+      if(CATEGORY_KEYWORDS[i].match.test(desc)){
+        var found = list.filter(function(c){
+          var low = c.toLowerCase();
+          return low.indexOf(CATEGORY_KEYWORDS[i].guess) !== -1;
+        })[0];
+        if(found) return found;
+      }
+    }
+    return list.indexOf("Outros") !== -1 ? "Outros" : list[0];
+  }
+
   function renderInvoiceRows(){
     var body = $("invoiceRowsBody");
     body.innerHTML = "";
+    var ownerCard = cards.filter(function(c){ return c.id === invoiceTargetCardId; })[0];
     invoiceParsedRows.forEach(function(row, i){
+      var guessedCat = guessCategory(row.description, row.type);
       var tr = document.createElement("tr");
       tr.innerHTML =
         '<td><input type="checkbox" checked data-i="' + i + '" class="inv-check"></td>' +
@@ -2607,11 +2651,12 @@
           '<option value="out"' + (row.type === "out" ? " selected" : "") + '>Saída</option>' +
           '<option value="in"' + (row.type === "in" ? " selected" : "") + '>Entrada</option>' +
         '</select></td>' +
-        '<td><select data-i="' + i + '" class="inv-cat">' + categoryOptionsHtml("Outros", row.type) + '</select></td>' +
+        '<td><select data-i="' + i + '" class="inv-cat">' + categoryOptionsHtml(guessedCat, row.type) + '</select></td>' +
         '<td><input type="number" step="0.01" min="0" value="' + row.amount.toFixed(2) + '" data-i="' + i + '" class="inv-amount"></td>';
       body.appendChild(tr);
     });
-    $("invoiceCount").textContent = invoiceParsedRows.length + " lançamento(s) reconhecido(s) — confira, ajuste o tipo/categoria se precisar, e desmarque o que não for pra importar.";
+    var ownerNote = ownerCard && ownerCard.owner ? (" Responsável: " + ownerCard.owner + ".") : "";
+    $("invoiceCount").textContent = invoiceParsedRows.length + " lançamento(s) reconhecido(s) — confira, ajuste o tipo/categoria se precisar, e desmarque o que não for pra importar." + ownerNote;
 
     body.querySelectorAll(".inv-check").forEach(function(cb){
       cb.addEventListener("change", function(){
@@ -2621,7 +2666,8 @@
     body.querySelectorAll(".inv-type").forEach(function(sel){
       sel.addEventListener("change", function(){
         var catSelect = sel.closest("tr").querySelector(".inv-cat");
-        catSelect.innerHTML = categoryOptionsHtml("Outros", sel.value);
+        var i = parseInt(sel.getAttribute("data-i"), 10);
+        catSelect.innerHTML = categoryOptionsHtml(guessCategory(invoiceParsedRows[i].description, sel.value), sel.value);
       });
     });
   }
@@ -2629,6 +2675,8 @@
   $("confirmInvoiceBtn").addEventListener("click", function(){
     var body = $("invoiceRowsBody");
     var rows = body.querySelectorAll("tr");
+    var targetCard = cards.filter(function(c){ return c.id === invoiceTargetCardId; })[0];
+    var defaultPerson = (targetCard && targetCard.owner) || people[0];
     var added = 0;
     rows.forEach(function(tr){
       var check = tr.querySelector(".inv-check");
@@ -2644,7 +2692,7 @@
         type: type,
         description: desc,
         category: cat,
-        person: people[0],
+        person: defaultPerson,
         card: invoiceTargetCardId,
         amount: amount,
         date: date
