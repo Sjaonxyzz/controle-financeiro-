@@ -614,6 +614,14 @@
     color:var(--muted);
     font-variant-numeric:tabular-nums;
   }
+  .card-item-invoice{
+    margin-top:6px;
+    padding-top:6px;
+    border-top:1px dashed var(--line);
+    font-size:11px;
+    color:var(--gold);
+    font-variant-numeric:tabular-nums;
+  }
   .goal-auto-field{
     display:flex;
     align-items:center;
@@ -1260,6 +1268,17 @@
           <input type="number" id="cardUsed" step="0.01" min="0" value="0">
         </div>
       </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="cardClosingDay">Dia de fechamento (opcional)</label>
+          <input type="number" id="cardClosingDay" min="1" max="31" placeholder="Ex.: 4">
+        </div>
+        <div class="field">
+          <label for="cardDueDay">Dia de vencimento (opcional)</label>
+          <input type="number" id="cardDueDay" min="1" max="31" placeholder="Ex.: 12">
+        </div>
+      </div>
+      <p class="tool-empty" id="cardCycleHint" style="margin:-6px 0 6px;">Preenchendo isso, o app calcula a fatura pelo ciclo real do cartão, não pelo mês do calendário — o que fecha depois do dia informado já entra na fatura seguinte.</p>
       <p class="tool-empty" id="cardComputedHint" style="margin:-6px 0 6px;">Lançamentos com este cartão são somados automaticamente. Use o campo acima só para algo que já estava usado antes de começar a lançar aqui.</p>
       <button type="button" class="btn btn-ghost" id="importInvoiceBtn" hidden style="width:100%;margin-bottom:14px;">📄 Importar fatura (PDF)</button>
       <div class="dialog-actions">
@@ -2354,6 +2373,59 @@
     return Math.max(0, (card.used || 0) + cardLinkedTotal(card.id));
   }
 
+  // ---------- ciclo da fatura (fechamento/vencimento) ----------
+  function isoDate(d){
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function shortDate(d){
+    return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
+  }
+  function dayInMonth(year, month, day){
+    var lastDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, lastDay));
+  }
+
+  function currentInvoiceForCard(card){
+    if(!card.closingDay) return null;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var y = today.getFullYear(), m = today.getMonth();
+    var closeThis = dayInMonth(y, m, card.closingDay);
+    var closeDate, closeY, closeM;
+    if(today <= closeThis){
+      closeDate = closeThis; closeY = y; closeM = m;
+    } else {
+      closeM = m + 1; closeY = y;
+      if(closeM > 11){ closeM = 0; closeY++; }
+      closeDate = dayInMonth(closeY, closeM, card.closingDay);
+    }
+    var prevM = closeM - 1, prevY = closeY;
+    if(prevM < 0){ prevM = 11; prevY--; }
+    var prevClose = dayInMonth(prevY, prevM, card.closingDay);
+    var startDate = new Date(prevClose);
+    startDate.setDate(startDate.getDate() + 1);
+
+    var startStr = isoDate(startDate), endStr = isoDate(closeDate);
+    var total = 0;
+    transactions.forEach(function(t){
+      if(t.card !== card.id) return;
+      if(t.date < startStr || t.date > endStr) return;
+      total += (t.type === "out" ? t.amount : -t.amount);
+    });
+
+    var dueDate = closeDate;
+    if(card.dueDay){
+      dueDate = dayInMonth(closeY, closeM, card.dueDay);
+      if(card.dueDay < card.closingDay){
+        var dm = closeM + 1, dy = closeY;
+        if(dm > 11){ dm = 0; dy++; }
+        dueDate = dayInMonth(dy, dm, card.dueDay);
+      }
+    }
+
+    return {startDate: startDate, closeDate: closeDate, dueDate: dueDate, total: Math.max(0, total)};
+  }
+
   function renderCards(){
     var wrap = $("cardsList");
     wrap.innerHTML = "";
@@ -2363,12 +2435,17 @@
       var usedTotal = cardUsedTotal(card);
       var pct = card.limit > 0 ? Math.min(100, Math.round(usedTotal / card.limit * 100)) : 0;
       var color = pct >= 90 ? theme.expense : (pct >= 70 ? theme.gold : theme.income);
+      var invoice = currentInvoiceForCard(card);
+      var invoiceLine = invoice
+        ? '<div class="card-item-invoice">Fatura atual (' + shortDate(invoice.startDate) + '–' + shortDate(invoice.closeDate) + '): ' + fmt.format(invoice.total) + ' · vence ' + shortDate(invoice.dueDate) + '</div>'
+        : '';
       var el = document.createElement("div");
       el.className = "card-item";
       el.innerHTML =
         '<div class="card-item-head"><span class="name">' + escapeHtml(card.name) + '</span></div>' +
         '<div class="mini-bar-track"><span class="mini-bar-fill" style="width:' + pct + '%;background:' + color + '"></span></div>' +
-        '<div class="card-item-foot"><span>Usado: ' + fmt.format(usedTotal) + '</span><span>Limite: ' + fmt.format(card.limit) + '</span></div>';
+        '<div class="card-item-foot"><span>Usado: ' + fmt.format(usedTotal) + '</span><span>Limite: ' + fmt.format(card.limit) + '</span></div>' +
+        invoiceLine;
       el.addEventListener("click", function(){ openCardForm(card); });
       wrap.appendChild(el);
     });
@@ -2396,6 +2473,8 @@
       $("cardName").value = existing.name;
       $("cardLimit").value = existing.limit;
       $("cardUsed").value = existing.used;
+      $("cardClosingDay").value = existing.closingDay || "";
+      $("cardDueDay").value = existing.dueDay || "";
       $("deleteCardBtn").hidden = false;
       editingCardId = existing.id;
       $("importInvoiceBtn").hidden = false;
@@ -2427,7 +2506,9 @@
       name: $("cardName").value.trim(),
       owner: $("cardOwner").value || people[0],
       limit: Math.round(parseFloat($("cardLimit").value || "0") * 100) / 100,
-      used: Math.round(parseFloat($("cardUsed").value || "0") * 100) / 100
+      used: Math.round(parseFloat($("cardUsed").value || "0") * 100) / 100,
+      closingDay: $("cardClosingDay").value ? Math.min(31, Math.max(1, parseInt($("cardClosingDay").value, 10))) : null,
+      dueDay: $("cardDueDay").value ? Math.min(31, Math.max(1, parseInt($("cardDueDay").value, 10))) : null
     };
     if(!record.name || !record.limit){ return; }
     if(editingCardId){
@@ -2482,15 +2563,26 @@
     $("invoiceReviewWrap").hidden = true;
     $("confirmInvoiceBtn").hidden = true;
     setInvoiceStatus("Lendo o PDF…");
-    processInvoicePdf(file).then(function(rows){
-      invoiceParsedRows = rows;
-      if(!rows.length){
+    processInvoicePdf(file).then(function(result){
+      invoiceParsedRows = result.rows;
+      if(!result.rows.length){
         setInvoiceStatus("Não consegui reconhecer nenhum lançamento nesse PDF automaticamente. Isso pode acontecer se a fatura for uma imagem escaneada, ou se o layout for muito diferente do esperado.");
         return;
+      }
+      var targetCard = cards.filter(function(c){ return c.id === invoiceTargetCardId; })[0];
+      var closingNote = "";
+      if(result.closingDay && targetCard && !targetCard.closingDay){
+        targetCard.closingDay = result.closingDay;
+        cards = cards.map(function(c){ return c.id === targetCard.id ? targetCard : c; });
+        saveJSON(STORAGE_CARDS, cards);
+        closingNote = " Detectei o fechamento no dia " + result.closingDay + " e já preenchi isso no cartão.";
       }
       setInvoiceStatus("");
       $("invoiceStatus").hidden = true;
       renderInvoiceRows();
+      if(closingNote){
+        $("invoiceCount").textContent += closingNote;
+      }
       $("invoiceReviewWrap").hidden = false;
       $("confirmInvoiceBtn").hidden = false;
     }).catch(function(err){
@@ -2504,6 +2596,15 @@
     if(m) return {year: parseInt(m[1], 10), month: parseInt(m[2], 10)};
     var today = new Date();
     return {year: today.getFullYear(), month: today.getMonth() + 1};
+  }
+
+  function detectClosingDay(lines){
+    var re = /DE\s+\d{2}\s+\w+\s+A\s+(\d{2})\s+\w+/i;
+    for(var i = 0; i < lines.length; i++){
+      var m = lines[i].match(re);
+      if(m) return parseInt(m[1], 10);
+    }
+    return null;
   }
 
   function processInvoicePdf(file){
@@ -2523,7 +2624,10 @@
     }).then(function(pagesLines){
       var allLines = [];
       pagesLines.forEach(function(lines){ allLines = allLines.concat(lines); });
-      return parseInvoiceLines(allLines, hint);
+      return {
+        rows: parseInvoiceLines(allLines, hint),
+        closingDay: detectClosingDay(allLines)
+      };
     });
   }
 
