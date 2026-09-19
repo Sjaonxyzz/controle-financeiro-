@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
     --ink:#12161c;
@@ -726,8 +727,54 @@
     padding:0;
     width:min(480px, 92vw);
   }
+  dialog#invoiceDialog{width:min(780px, 94vw);}
   dialog::backdrop{background:rgba(8,10,13,.72);}
   .dialog-inner{padding:26px;}
+  .invoice-dialog-inner{padding:24px;}
+  #invoiceIntro{margin:0 0 16px;}
+  .invoice-table-wrap{
+    max-height:360px;
+    overflow-y:auto;
+    border:1px solid var(--line);
+    border-radius:6px;
+    margin-bottom:10px;
+  }
+  .invoice-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12.5px;
+  }
+  .invoice-table thead th{
+    position:sticky;
+    top:0;
+    background:var(--panel-2);
+    text-align:left;
+    font-weight:600;
+    color:var(--muted);
+    font-size:11px;
+    padding:8px 8px;
+    border-bottom:1px solid var(--line);
+    z-index:1;
+  }
+  .invoice-table thead th.num{text-align:right;}
+  .invoice-table td{
+    padding:6px 8px;
+    border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  .invoice-table input, .invoice-table select{
+    width:100%;
+    font-family:var(--sans);
+    font-size:12.5px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    padding:5px 6px;
+    border-radius:4px;
+  }
+  .invoice-table input[type="number"]{text-align:right;}
+  .invoice-table input[type="checkbox"]{width:auto;}
+  .invoice-row-skip{opacity:.4;}
   .dialog-inner h3{
     font-family:var(--serif);
     font-weight:500;
@@ -1210,12 +1257,49 @@
         </div>
       </div>
       <p class="tool-empty" id="cardComputedHint" style="margin:-6px 0 6px;">Lançamentos com este cartão são somados automaticamente. Use o campo acima só para algo que já estava usado antes de começar a lançar aqui.</p>
+      <button type="button" class="btn btn-ghost" id="importInvoiceBtn" hidden style="width:100%;margin-bottom:14px;">📄 Importar fatura (PDF)</button>
       <div class="dialog-actions">
         <button type="button" class="btn" id="deleteCardBtn" hidden style="margin-right:auto;">Excluir</button>
         <button type="button" class="btn" id="cancelCardBtn">Cancelar</button>
         <button type="submit" class="btn btn-primary">Salvar</button>
       </div>
     </form>
+  </div>
+</dialog>
+
+<dialog id="invoiceDialog">
+  <div class="dialog-inner invoice-dialog-inner">
+    <h3>Importar fatura em PDF</h3>
+    <p class="tool-empty" id="invoiceIntro">Escolha o PDF da fatura. O site tenta reconhecer data, descrição e valor de cada lançamento — confira e ajuste antes de importar, já que cada banco formata a fatura de um jeito diferente.</p>
+
+    <div class="field">
+      <input type="file" id="invoiceFileInput" accept="application/pdf">
+    </div>
+
+    <p class="tool-empty" id="invoiceStatus" hidden></p>
+
+    <div id="invoiceReviewWrap" hidden>
+      <div class="invoice-table-wrap">
+        <table class="invoice-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Data</th>
+              <th>Descrição</th>
+              <th>Categoria</th>
+              <th class="num">Valor</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceRowsBody"></tbody>
+        </table>
+      </div>
+      <p class="tool-empty" id="invoiceCount"></p>
+    </div>
+
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="cancelInvoiceBtn">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="confirmInvoiceBtn" hidden>Importar selecionados</button>
+    </div>
   </div>
 </dialog>
 
@@ -2296,11 +2380,13 @@
       $("cardUsed").value = existing.used;
       $("deleteCardBtn").hidden = false;
       editingCardId = existing.id;
+      $("importInvoiceBtn").hidden = false;
       var linked = cardLinkedTotal(existing.id);
       $("cardComputedHint").textContent = "Lançamentos com este cartão somam " + fmt.format(linked) + " até agora, somados automaticamente. Total usado: " + fmt.format(cardUsedTotal(existing)) + ".";
     } else {
       $("cardDialogTitle").textContent = "Novo cartão";
       $("deleteCardBtn").hidden = true;
+      $("importInvoiceBtn").hidden = true;
       editingCardId = null;
       $("cardComputedHint").textContent = "Lançamentos com este cartão são somados automaticamente. Use o campo acima só para algo que já estava usado antes de começar a lançar aqui.";
     }
@@ -2333,6 +2419,199 @@
     saveJSON(STORAGE_CARDS, cards);
     cardDialog.close();
     renderCards();
+  });
+
+  // ---------- importar fatura em PDF ----------
+  if(window.pdfjsLib){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+
+  var invoiceDialog = $("invoiceDialog");
+  var invoiceTargetCardId = null;
+  var invoiceParsedRows = [];
+
+  $("importInvoiceBtn").addEventListener("click", function(){
+    if(!editingCardId) return;
+    invoiceTargetCardId = editingCardId;
+    cardDialog.close();
+    resetInvoiceDialog();
+    invoiceDialog.showModal();
+  });
+
+  $("cancelInvoiceBtn").addEventListener("click", function(){
+    invoiceDialog.close();
+  });
+
+  function resetInvoiceDialog(){
+    $("invoiceFileInput").value = "";
+    $("invoiceStatus").hidden = true;
+    $("invoiceReviewWrap").hidden = true;
+    $("confirmInvoiceBtn").hidden = true;
+    $("invoiceRowsBody").innerHTML = "";
+    invoiceParsedRows = [];
+  }
+
+  function setInvoiceStatus(msg){
+    var el = $("invoiceStatus");
+    el.hidden = false;
+    el.textContent = msg;
+  }
+
+  $("invoiceFileInput").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    $("invoiceReviewWrap").hidden = true;
+    $("confirmInvoiceBtn").hidden = true;
+    setInvoiceStatus("Lendo o PDF…");
+    processInvoicePdf(file).then(function(rows){
+      invoiceParsedRows = rows;
+      if(!rows.length){
+        setInvoiceStatus("Não consegui reconhecer nenhum lançamento nesse PDF automaticamente. Isso pode acontecer se a fatura for uma imagem escaneada, ou se o layout for muito diferente do esperado.");
+        return;
+      }
+      setInvoiceStatus("");
+      $("invoiceStatus").hidden = true;
+      renderInvoiceRows();
+      $("invoiceReviewWrap").hidden = false;
+      $("confirmInvoiceBtn").hidden = false;
+    }).catch(function(err){
+      console.error("Erro ao ler PDF:", err);
+      setInvoiceStatus("Não foi possível ler esse arquivo como PDF. Verifique se é o arquivo certo e tente de novo.");
+    });
+  });
+
+  function processInvoicePdf(file){
+    return file.arrayBuffer().then(function(buffer){
+      return pdfjsLib.getDocument({data: buffer}).promise;
+    }).then(function(pdf){
+      var pagePromises = [];
+      for(var i = 1; i <= pdf.numPages; i++){
+        pagePromises.push(pdf.getPage(i).then(function(page){
+          return page.getTextContent().then(function(content){
+            return extractLinesFromTextContent(content);
+          });
+        }));
+      }
+      return Promise.all(pagePromises);
+    }).then(function(pagesLines){
+      var allLines = [];
+      pagesLines.forEach(function(lines){ allLines = allLines.concat(lines); });
+      return parseInvoiceLines(allLines);
+    });
+  }
+
+  function extractLinesFromTextContent(content){
+    var byY = {};
+    content.items.forEach(function(item){
+      var y = Math.round(item.transform[5] / 2) * 2;
+      if(!byY[y]) byY[y] = [];
+      byY[y].push(item);
+    });
+    var ys = Object.keys(byY).map(Number).sort(function(a, b){ return b - a; });
+    var lines = [];
+    ys.forEach(function(y){
+      var items = byY[y].sort(function(a, b){ return a.transform[4] - b.transform[4]; });
+      var text = items.map(function(it){ return it.str; }).join(" ").replace(/\s+/g, " ").trim();
+      if(text) lines.push(text);
+    });
+    return lines;
+  }
+
+  function parseInvoiceLines(lines){
+    var dateRe = /(\d{2}\/\d{2}(?:\/\d{2,4})?)/;
+    var valueRe = /(-?\s?R?\$?\s?\d{1,3}(?:\.\d{3})*,\d{2})\s*-?\s*$/;
+    var skipWords = /^(saldo|total|limite|subtotal|encargos|iof|juros)\b/i;
+    var results = [];
+    lines.forEach(function(line){
+      var dm = line.match(dateRe);
+      var vm = line.match(valueRe);
+      if(!dm || !vm) return;
+      if(dm.index > 6) return;
+      var dateStr = dm[1];
+      var rawValue = vm[1];
+      var negative = /^-/.test(rawValue.trim()) || /-\s*$/.test(vm[0]);
+      var valueClean = rawValue.replace(/[R$\s-]/g, "").replace(/\.(?=\d{3}(,|$))/g, "").replace(",", ".");
+      var value = parseFloat(valueClean);
+      if(isNaN(value) || value === 0) return;
+
+      var desc = line.slice(dm.index + dm[0].length, vm.index).trim();
+      desc = desc.replace(/\s{2,}/g, " ");
+      if(!desc || desc.length < 2) return;
+      if(skipWords.test(desc)) return;
+
+      var parts = dateStr.split("/");
+      var day = parts[0], month = parts[1];
+      var year = parts[2] ? (parts[2].length === 2 ? "20" + parts[2] : parts[2]) : String(new Date().getFullYear());
+      var iso = year + "-" + month.padStart(2, "0") + "-" + day.padStart(2, "0");
+
+      results.push({
+        date: iso,
+        description: desc,
+        amount: Math.abs(Math.round(value * 100) / 100),
+        type: negative ? "in" : "out"
+      });
+    });
+    return results;
+  }
+
+  function categoryOptionsHtml(selected){
+    return categories.out.map(function(c){
+      return '<option value="' + escapeHtml(c) + '"' + (c === selected ? " selected" : "") + '>' + escapeHtml(c) + '</option>';
+    }).join("");
+  }
+
+  function renderInvoiceRows(){
+    var body = $("invoiceRowsBody");
+    body.innerHTML = "";
+    invoiceParsedRows.forEach(function(row, i){
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td><input type="checkbox" checked data-i="' + i + '" class="inv-check"></td>' +
+        '<td><input type="date" value="' + row.date + '" data-i="' + i + '" class="inv-date"></td>' +
+        '<td><input type="text" value="' + escapeHtml(row.description) + '" data-i="' + i + '" class="inv-desc"></td>' +
+        '<td><select data-i="' + i + '" class="inv-cat">' + categoryOptionsHtml("Outros") + '</select></td>' +
+        '<td><input type="number" step="0.01" min="0" value="' + row.amount.toFixed(2) + '" data-i="' + i + '" class="inv-amount"></td>';
+      body.appendChild(tr);
+    });
+    $("invoiceCount").textContent = invoiceParsedRows.length + " lançamento(s) reconhecido(s) — desmarque o que não for para importar.";
+
+    body.querySelectorAll(".inv-check").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        cb.closest("tr").classList.toggle("invoice-row-skip", !cb.checked);
+      });
+    });
+  }
+
+  $("confirmInvoiceBtn").addEventListener("click", function(){
+    var body = $("invoiceRowsBody");
+    var rows = body.querySelectorAll("tr");
+    var added = 0;
+    rows.forEach(function(tr){
+      var check = tr.querySelector(".inv-check");
+      if(!check.checked) return;
+      var date = tr.querySelector(".inv-date").value;
+      var desc = tr.querySelector(".inv-desc").value.trim();
+      var cat = tr.querySelector(".inv-cat").value;
+      var amount = Math.round(parseFloat(tr.querySelector(".inv-amount").value || "0") * 100) / 100;
+      if(!date || !desc || !amount) return;
+      transactions.push({
+        id: uid(),
+        type: "out",
+        description: desc,
+        category: cat,
+        person: people[0],
+        card: invoiceTargetCardId,
+        amount: amount,
+        date: date
+      });
+      added++;
+    });
+    saveJSON(STORAGE_TX, transactions);
+    invoiceDialog.close();
+    renderAll();
+    setTimeout(function(){
+      window.alert(added + " lançamento(s) importado(s) e vinculado(s) ao cartão.");
+    }, 150);
   });
 
   // ---------- metas ----------
