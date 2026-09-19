@@ -142,12 +142,20 @@
     display:grid;
     grid-template-columns:1fr 300px;
     gap:20px;
-    align-items:start;
+    align-items:stretch;
   }
   .side-tools{
     display:flex;
     flex-direction:column;
     gap:20px;
+  }
+  .month-row > .month-summary{
+    display:flex;
+    flex-direction:column;
+  }
+  .month-row > .month-summary #viewMonthLedgerBtn{
+    margin-top:auto;
+    align-self:flex-start;
   }
   @media (max-width:1000px){
     .month-row{grid-template-columns:1fr;}
