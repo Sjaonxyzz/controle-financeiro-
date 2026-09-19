@@ -1286,6 +1286,7 @@
               <th></th>
               <th>Data</th>
               <th>Descrição</th>
+              <th>Tipo</th>
               <th>Categoria</th>
               <th class="num">Valor</th>
             </tr>
@@ -2480,7 +2481,15 @@
     });
   });
 
+  function dateHintFromFilename(name){
+    var m = name.match(/(20\d{2})-(\d{2})-(\d{2})/);
+    if(m) return {year: parseInt(m[1], 10), month: parseInt(m[2], 10)};
+    var today = new Date();
+    return {year: today.getFullYear(), month: today.getMonth() + 1};
+  }
+
   function processInvoicePdf(file){
+    var hint = dateHintFromFilename(file.name || "");
     return file.arrayBuffer().then(function(buffer){
       return pdfjsLib.getDocument({data: buffer}).promise;
     }).then(function(pdf){
@@ -2496,7 +2505,7 @@
     }).then(function(pagesLines){
       var allLines = [];
       pagesLines.forEach(function(lines){ allLines = allLines.concat(lines); });
-      return parseInvoiceLines(allLines);
+      return parseInvoiceLines(allLines, hint);
     });
   }
 
@@ -2517,32 +2526,56 @@
     return lines;
   }
 
-  function parseInvoiceLines(lines){
-    var dateRe = /(\d{2}\/\d{2}(?:\/\d{2,4})?)/;
+  var PT_MONTHS = {jan:1, fev:2, mar:3, abr:4, mai:5, jun:6, jul:7, ago:8, set:9, out:10, nov:11, dez:12};
+
+  function parseInvoiceLines(lines, hint){
+    hint = hint || {year: new Date().getFullYear(), month: new Date().getMonth() + 1};
+    var dateSlashRe = /^\s*(\d{2})\/(\d{2})(?:\/(\d{2,4}))?/;
+    var dateNameRe = /^\s*(\d{2})\s+(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i;
     var valueRe = /(-?\s?R?\$?\s?\d{1,3}(?:\.\d{3})*,\d{2})\s*-?\s*$/;
     var skipWords = /^(saldo|total|limite|subtotal|encargos|iof|juros)\b/i;
     var results = [];
+
     lines.forEach(function(line){
-      var dm = line.match(dateRe);
+      var day, month, yearExplicit, dateMatchLength;
+      var sm = line.match(dateSlashRe);
+      var nm = !sm ? line.match(dateNameRe) : null;
+      if(sm){
+        day = sm[1];
+        month = sm[2];
+        yearExplicit = sm[3] ? (sm[3].length === 2 ? "20" + sm[3] : sm[3]) : null;
+        dateMatchLength = sm[0].length;
+      } else if(nm){
+        day = nm[1];
+        month = String(PT_MONTHS[nm[2].toLowerCase()]).padStart(2, "0");
+        yearExplicit = null;
+        dateMatchLength = nm[0].length;
+      } else {
+        return;
+      }
+
       var vm = line.match(valueRe);
-      if(!dm || !vm) return;
-      if(dm.index > 6) return;
-      var dateStr = dm[1];
+      if(!vm) return;
+
       var rawValue = vm[1];
-      var negative = /^-/.test(rawValue.trim()) || /-\s*$/.test(vm[0]);
+      var negative = /^-/.test(rawValue.trim());
       var valueClean = rawValue.replace(/[R$\s-]/g, "").replace(/\.(?=\d{3}(,|$))/g, "").replace(",", ".");
       var value = parseFloat(valueClean);
       if(isNaN(value) || value === 0) return;
 
-      var desc = line.slice(dm.index + dm[0].length, vm.index).trim();
-      desc = desc.replace(/\s{2,}/g, " ");
+      var desc = line.slice(dateMatchLength, vm.index).trim();
+      desc = desc.replace(/^[•●○.\s]{2,}\s*\d{0,6}\s*/, "");
+      desc = desc.replace(/^nu\s+/i, "");
+      desc = desc.replace(/\s{2,}/g, " ").trim();
       if(!desc || desc.length < 2) return;
       if(skipWords.test(desc)) return;
 
-      var parts = dateStr.split("/");
-      var day = parts[0], month = parts[1];
-      var year = parts[2] ? (parts[2].length === 2 ? "20" + parts[2] : parts[2]) : String(new Date().getFullYear());
-      var iso = year + "-" + month.padStart(2, "0") + "-" + day.padStart(2, "0");
+      var year = yearExplicit;
+      if(!year){
+        year = hint.year;
+        if(parseInt(month, 10) > hint.month) year = hint.year - 1;
+      }
+      var iso = year + "-" + String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0");
 
       results.push({
         date: iso,
@@ -2554,8 +2587,9 @@
     return results;
   }
 
-  function categoryOptionsHtml(selected){
-    return categories.out.map(function(c){
+  function categoryOptionsHtml(selected, type){
+    var list = type === "in" ? categories.in : categories.out;
+    return list.map(function(c){
       return '<option value="' + escapeHtml(c) + '"' + (c === selected ? " selected" : "") + '>' + escapeHtml(c) + '</option>';
     }).join("");
   }
@@ -2569,15 +2603,25 @@
         '<td><input type="checkbox" checked data-i="' + i + '" class="inv-check"></td>' +
         '<td><input type="date" value="' + row.date + '" data-i="' + i + '" class="inv-date"></td>' +
         '<td><input type="text" value="' + escapeHtml(row.description) + '" data-i="' + i + '" class="inv-desc"></td>' +
-        '<td><select data-i="' + i + '" class="inv-cat">' + categoryOptionsHtml("Outros") + '</select></td>' +
+        '<td><select data-i="' + i + '" class="inv-type">' +
+          '<option value="out"' + (row.type === "out" ? " selected" : "") + '>Saída</option>' +
+          '<option value="in"' + (row.type === "in" ? " selected" : "") + '>Entrada</option>' +
+        '</select></td>' +
+        '<td><select data-i="' + i + '" class="inv-cat">' + categoryOptionsHtml("Outros", row.type) + '</select></td>' +
         '<td><input type="number" step="0.01" min="0" value="' + row.amount.toFixed(2) + '" data-i="' + i + '" class="inv-amount"></td>';
       body.appendChild(tr);
     });
-    $("invoiceCount").textContent = invoiceParsedRows.length + " lançamento(s) reconhecido(s) — desmarque o que não for para importar.";
+    $("invoiceCount").textContent = invoiceParsedRows.length + " lançamento(s) reconhecido(s) — confira, ajuste o tipo/categoria se precisar, e desmarque o que não for pra importar.";
 
     body.querySelectorAll(".inv-check").forEach(function(cb){
       cb.addEventListener("change", function(){
         cb.closest("tr").classList.toggle("invoice-row-skip", !cb.checked);
+      });
+    });
+    body.querySelectorAll(".inv-type").forEach(function(sel){
+      sel.addEventListener("change", function(){
+        var catSelect = sel.closest("tr").querySelector(".inv-cat");
+        catSelect.innerHTML = categoryOptionsHtml("Outros", sel.value);
       });
     });
   }
@@ -2591,12 +2635,13 @@
       if(!check.checked) return;
       var date = tr.querySelector(".inv-date").value;
       var desc = tr.querySelector(".inv-desc").value.trim();
+      var type = tr.querySelector(".inv-type").value;
       var cat = tr.querySelector(".inv-cat").value;
       var amount = Math.round(parseFloat(tr.querySelector(".inv-amount").value || "0") * 100) / 100;
       if(!date || !desc || !amount) return;
       transactions.push({
         id: uid(),
-        type: "out",
+        type: type,
         description: desc,
         category: cat,
         person: people[0],
