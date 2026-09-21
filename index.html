@@ -624,6 +624,72 @@
     color:var(--gold);
     font-variant-numeric:tabular-nums;
   }
+  .due-toggle-field{
+    display:flex;
+    align-items:flex-start;
+    gap:8px;
+    width:100%;
+    max-width:100%;
+    cursor:pointer;
+    margin-bottom:14px;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .due-toggle-field input{width:auto;flex:none;margin:2px 0 0;}
+  .due-toggle-field span{
+    flex:1 1 0%;
+    min-width:0;
+    overflow-wrap:break-word;
+    word-break:break-word;
+  }
+
+  dialog#dueDialog{width:min(880px, 96vw);}
+  .due-dialog-inner{padding:24px;}
+  .due-summary{
+    display:flex;
+    gap:24px;
+    margin-bottom:18px;
+    flex-wrap:wrap;
+  }
+  .due-summary-item .label{
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 3px;
+  }
+  .due-summary-item .value{
+    font-family:var(--serif);
+    font-weight:500;
+    font-size:20px;
+    margin:0;
+    font-variant-numeric:tabular-nums;
+    color:var(--gold);
+  }
+  .due-summary-late .value{color:var(--expense);}
+  .due-filters{margin-bottom:14px;}
+  .due-table-wrap{max-height:420px;}
+  .due-status-chip{
+    display:inline-block;
+    font-size:11px;
+    padding:2px 8px;
+    border-radius:999px;
+    border:1px solid var(--line);
+  }
+  .due-status-pending{color:var(--gold);border-color:var(--gold);}
+  .due-status-late{color:var(--expense);border-color:var(--expense);}
+  .due-status-paid{color:var(--income);border-color:var(--income);}
+  .due-pay-btn{
+    font-family:var(--sans);
+    font-size:11px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    padding:4px 8px;
+    border-radius:4px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .due-pay-btn:hover{border-color:var(--gold);}
+
   .goal-auto-field{
     display:flex;
     align-items:flex-start;
@@ -997,6 +1063,7 @@
     <span class="user-badge" id="userBadge"></span>
     <button class="btn btn-ghost" id="managePeopleBtn">👤 Responsáveis</button>
     <button class="btn btn-ghost" id="manageCatBtn">⚙ Categorias</button>
+    <button class="btn btn-ghost" id="openDueBtn">📅 Vencimentos</button>
     <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
     <button class="btn btn-ghost" id="logoutBtn">Sair</button>
   </div>
@@ -1224,6 +1291,24 @@
         </select>
       </div>
 
+      <label class="due-toggle-field" for="txHasDue">
+        <input type="checkbox" id="txHasDue">
+        <span>Definir vencimento (conta a pagar/receber)</span>
+      </label>
+      <div class="field-row" id="txDueRow" hidden>
+        <div class="field">
+          <label for="txDueDate">Vencimento</label>
+          <input type="date" id="txDueDate">
+        </div>
+        <div class="field">
+          <label for="txDuePaid">Status</label>
+          <select id="txDuePaid">
+            <option value="0">Pendente</option>
+            <option value="1">Pago</option>
+          </select>
+        </div>
+      </div>
+
       <div class="dialog-actions">
         <button type="button" class="btn" id="deleteTxBtn" hidden style="margin-right:auto;">Excluir</button>
         <button type="button" class="btn" id="cancelFormBtn">Cancelar</button>
@@ -1372,6 +1457,69 @@
         <button type="submit" class="btn btn-primary">Salvar</button>
       </div>
     </form>
+  </div>
+</dialog>
+
+<dialog id="dueDialog">
+  <div class="dialog-inner due-dialog-inner">
+    <h3>Vencimentos</h3>
+
+    <div class="due-summary">
+      <div class="due-summary-item">
+        <p class="label">Pendente</p>
+        <p class="value" id="duePendingTotal">R$ 0,00</p>
+      </div>
+      <div class="due-summary-item due-summary-late">
+        <p class="label">Atrasado</p>
+        <p class="value" id="dueLateTotal">R$ 0,00</p>
+      </div>
+      <div class="due-summary-item">
+        <p class="label">Vence em 7 dias</p>
+        <p class="value" id="dueSoonTotal">R$ 0,00</p>
+      </div>
+    </div>
+
+    <div class="filters due-filters">
+      <select id="dueFilterStatus">
+        <option value="pending">Pendentes e atrasados</option>
+        <option value="late">Só atrasados</option>
+        <option value="paid">Só pagos</option>
+        <option value="all">Todos</option>
+      </select>
+      <select id="dueFilterType">
+        <option value="all">Todos os tipos</option>
+        <option value="in">A receber</option>
+        <option value="out">A pagar</option>
+      </select>
+      <label class="date-filter-label" for="dueFilterFrom">De
+        <input type="date" id="dueFilterFrom">
+      </label>
+      <label class="date-filter-label" for="dueFilterTo">Até
+        <input type="date" id="dueFilterTo">
+      </label>
+    </div>
+
+    <div class="invoice-table-wrap due-table-wrap">
+      <table class="invoice-table">
+        <thead>
+          <tr>
+            <th>Vencimento</th>
+            <th>Descrição</th>
+            <th>Categoria</th>
+            <th>Quem</th>
+            <th class="num">Valor</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="dueRowsBody"></tbody>
+      </table>
+      <p class="tool-empty" id="dueEmpty" style="padding:16px;" hidden>Nenhum lançamento com vencimento encontrado com esses filtros.</p>
+    </div>
+
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-primary" id="closeDueDialog">Fechar</button>
+    </div>
   </div>
 </dialog>
 
@@ -1885,6 +2033,17 @@
         txPerson.value = existing.person;
       }
       txCard.value = existing.card && cards.some(function(c){ return c.id === existing.card; }) ? existing.card : "";
+      if(existing.dueDate){
+        $("txHasDue").checked = true;
+        $("txDueRow").hidden = false;
+        $("txDueDate").value = existing.dueDate;
+        $("txDuePaid").value = existing.paid ? "1" : "0";
+      } else {
+        $("txHasDue").checked = false;
+        $("txDueRow").hidden = true;
+        $("txDueDate").value = "";
+        $("txDuePaid").value = "0";
+      }
     } else {
       editingId = null;
       dialogTitle.textContent = "Novo lançamento";
@@ -1892,6 +2051,10 @@
       setType("out");
       txDate.value = todayISO();
       txCard.value = "";
+      $("txHasDue").checked = false;
+      $("txDueRow").hidden = true;
+      $("txDueDate").value = "";
+      $("txDuePaid").value = "0";
     }
     refreshDescSuggestions();
     formDialog.showModal();
@@ -1899,6 +2062,10 @@
 
   $("openFormBtn").addEventListener("click", function(){ openForm(null); });
   $("cancelFormBtn").addEventListener("click", function(){ formDialog.close(); });
+
+  $("txHasDue").addEventListener("change", function(){
+    $("txDueRow").hidden = !$("txHasDue").checked;
+  });
 
   deleteTxBtn.addEventListener("click", function(){
     if(!editingId) return;
@@ -1920,7 +2087,9 @@
       person: personValue,
       card: txCard.value || "",
       amount: Math.round(parseFloat(txAmount.value || "0") * 100) / 100,
-      date: txDate.value
+      date: txDate.value,
+      dueDate: $("txHasDue").checked && $("txDueDate").value ? $("txDueDate").value : "",
+      paid: $("txHasDue").checked ? ($("txDuePaid").value === "1") : true
     };
     if(!record.description || !record.amount || !record.date){ return; }
 
@@ -2248,9 +2417,15 @@
           cardTag = ' <span class="cat-chip card-chip">' + escapeHtml(cardObj.name) + '</span>';
         }
       }
+      var dueTag = "";
+      if(t.dueDate && !t.paid){
+        var st = dueStatusOf(t);
+        var stLabel = st === "late" ? "Atrasado" : "Vence " + dateFmt.format(new Date(t.dueDate + "T00:00:00Z"));
+        dueTag = ' <span class="due-status-chip due-status-' + st + '">' + stLabel + '</span>';
+      }
       tr.innerHTML =
         '<td>' + dateFmt.format(new Date(t.date + "T00:00:00Z")) + '</td>' +
-        '<td>' + escapeHtml(t.description) + '</td>' +
+        '<td>' + escapeHtml(t.description) + dueTag + '</td>' +
         '<td><span class="cat-chip">' + escapeHtml(t.category) + '</span>' + cardTag + '</td>' +
         '<td><span class="cat-chip">' + escapeHtml(t.person || "—") + '</span></td>' +
         '<td class="num ' + t.type + '">' + (t.type === "in" ? "+ " : "− ") + fmt.format(t.amount) + '</td>' +
@@ -2368,6 +2543,100 @@
     renderCards();
     renderGoals();
     renderLedger();
+  }
+
+  // ---------- vencimentos ----------
+  var dueDialog = $("dueDialog");
+
+  function dueStatusOf(t){
+    if(t.paid) return "paid";
+    var today = todayISO();
+    return t.dueDate < today ? "late" : "pending";
+  }
+
+  $("openDueBtn").addEventListener("click", function(){
+    renderDueList();
+    dueDialog.showModal();
+  });
+  $("closeDueDialog").addEventListener("click", function(){ dueDialog.close(); });
+
+  ["dueFilterStatus", "dueFilterType", "dueFilterFrom", "dueFilterTo"].forEach(function(id){
+    $(id).addEventListener("change", renderDueList);
+  });
+
+  function renderDueList(){
+    var withDue = transactions.filter(function(t){ return !!t.dueDate; });
+
+    var today = todayISO();
+    var in7 = new Date();
+    in7.setDate(in7.getDate() + 7);
+    var in7Str = in7.toISOString().slice(0, 10);
+
+    var pendingTotal = 0, lateTotal = 0, soonTotal = 0;
+    withDue.forEach(function(t){
+      var status = dueStatusOf(t);
+      var signedAmount = t.amount;
+      if(status === "pending") pendingTotal += signedAmount;
+      if(status === "late") lateTotal += signedAmount;
+      if(status !== "paid" && t.dueDate >= today && t.dueDate <= in7Str) soonTotal += signedAmount;
+    });
+    $("duePendingTotal").textContent = fmt.format(pendingTotal);
+    $("dueLateTotal").textContent = fmt.format(lateTotal);
+    $("dueSoonTotal").textContent = fmt.format(soonTotal);
+
+    var statusFilter = $("dueFilterStatus").value;
+    var typeFilter = $("dueFilterType").value;
+    var from = $("dueFilterFrom").value;
+    var to = $("dueFilterTo").value;
+
+    var rows = withDue.filter(function(t){
+      var status = dueStatusOf(t);
+      if(statusFilter === "pending" && status === "paid") return false;
+      if(statusFilter === "late" && status !== "late") return false;
+      if(statusFilter === "paid" && status !== "paid") return false;
+      if(typeFilter !== "all" && t.type !== typeFilter) return false;
+      if(from && t.dueDate < from) return false;
+      if(to && t.dueDate > to) return false;
+      return true;
+    }).sort(function(a, b){ return a.dueDate.localeCompare(b.dueDate); });
+
+    var body = $("dueRowsBody");
+    body.innerHTML = "";
+    $("dueEmpty").hidden = rows.length > 0;
+
+    var statusLabel = {pending: "Pendente", late: "Atrasado", paid: "Pago"};
+    rows.forEach(function(t){
+      var status = dueStatusOf(t);
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        '<td>' + dateFmt.format(new Date(t.dueDate + "T00:00:00Z")) + '</td>' +
+        '<td>' + escapeHtml(t.description) + '</td>' +
+        '<td><span class="cat-chip">' + escapeHtml(t.category) + '</span></td>' +
+        '<td><span class="cat-chip">' + escapeHtml(t.person || "—") + '</span></td>' +
+        '<td class="num ' + t.type + '">' + (t.type === "in" ? "+ " : "− ") + fmt.format(t.amount) + '</td>' +
+        '<td><span class="due-status-chip due-status-' + status + '">' + statusLabel[status] + '</span></td>' +
+        '<td></td>';
+      var actionTd = tr.lastElementChild;
+      if(status !== "paid"){
+        var payBtn = document.createElement("button");
+        payBtn.type = "button";
+        payBtn.className = "due-pay-btn";
+        payBtn.textContent = "Marcar pago";
+        payBtn.addEventListener("click", function(e){
+          e.stopPropagation();
+          t.paid = true;
+          saveJSON(STORAGE_TX, transactions);
+          renderDueList();
+          renderAll();
+        });
+        actionTd.appendChild(payBtn);
+      }
+      tr.addEventListener("click", function(){
+        dueDialog.close();
+        openForm(t);
+      });
+      body.appendChild(tr);
+    });
   }
 
   // ---------- cartões ----------
@@ -2919,12 +3188,12 @@
   });
 
   $("exportCsvBtn").addEventListener("click", function(){
-    var header = "data,tipo,descricao,categoria,responsavel,cartao,valor\n";
+    var header = "data,tipo,descricao,categoria,responsavel,cartao,valor,vencimento,pago\n";
     var rows = transactions.map(function(t){
       var tipo = t.type === "in" ? "entrada" : "saida";
       var desc = '"' + t.description.replace(/"/g,'""') + '"';
       var cardObj = t.card ? cards.filter(function(c){ return c.id === t.card; })[0] : null;
-      return [t.date, tipo, desc, t.category, t.person || "", cardObj ? cardObj.name : "", t.amount.toFixed(2)].join(",");
+      return [t.date, tipo, desc, t.category, t.person || "", cardObj ? cardObj.name : "", t.amount.toFixed(2), t.dueDate || "", t.dueDate ? (t.paid ? "sim" : "nao") : ""].join(",");
     });
     download("financas.csv", header + rows.join("\n"), "text/csv");
   });
