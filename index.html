@@ -677,6 +677,21 @@
   .due-summary-late .value{color:var(--expense);}
   .due-filters{margin-bottom:14px;}
   .due-table-wrap{max-height:420px;}
+  .due-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:17px;
+    height:17px;
+    padding:0 5px;
+    margin-left:6px;
+    border-radius:999px;
+    background:var(--expense);
+    color:#fff;
+    font-size:10.5px;
+    font-weight:700;
+    vertical-align:middle;
+  }
   .due-status-chip{
     display:inline-block;
     font-size:11px;
@@ -1074,7 +1089,7 @@
     <span class="user-badge" id="userBadge"></span>
     <button class="btn btn-ghost" id="managePeopleBtn">👤 Responsáveis</button>
     <button class="btn btn-ghost" id="manageCatBtn">⚙ Categorias</button>
-    <button class="btn btn-ghost" id="openDueBtn">Vencimentos</button>
+    <button class="btn btn-ghost" id="openDueBtn">Vencimentos<span class="due-badge" id="dueBadge" hidden>0</span></button>
     <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
     <button class="btn btn-ghost" id="logoutBtn">Sair</button>
   </div>
@@ -1844,6 +1859,28 @@
     if(current && cards.some(function(c){ return c.id === current; })) txCard.value = current;
   }
 
+  var lastAutoCardDueDate = "";
+  function applyCardDueAutofill(){
+    var card = cards.filter(function(c){ return c.id === txCard.value; })[0];
+    if(!card || !card.closingDay || !txDate.value){
+      lastAutoCardDueDate = "";
+      return;
+    }
+    var due = invoiceDueDateForTransaction(card, txDate.value);
+    if(!due) return;
+    var dueStr = isoDate(due);
+    var dueField = $("txDueDate");
+    var manuallyChanged = dueField.value && dueField.value !== lastAutoCardDueDate;
+    if($("txHasDue").checked && manuallyChanged) return;
+    $("txHasDue").checked = true;
+    $("txDueRow").hidden = false;
+    dueField.value = dueStr;
+    $("txDuePaid").value = "0";
+    lastAutoCardDueDate = dueStr;
+  }
+  txCard.addEventListener("change", applyCardDueAutofill);
+  txDate.addEventListener("change", applyCardDueAutofill);
+
   txPerson.addEventListener("change", function(){
     if(txPerson.value === "__add__"){
       newPersonRow.hidden = false;
@@ -2028,6 +2065,7 @@
     autofillHint.hidden = true;
     newCatRow.hidden = true;
     newPersonRow.hidden = true;
+    lastAutoCardDueDate = "";
     refreshPersonSelect();
     refreshCardSelect();
     if(existing){
@@ -2554,6 +2592,7 @@
     renderCards();
     renderGoals();
     renderLedger();
+    updateDueBadge();
   }
 
   // ---------- vencimentos ----------
@@ -2563,6 +2602,19 @@
     if(t.paid) return "paid";
     var today = todayISO();
     return t.dueDate < today ? "late" : "pending";
+  }
+
+  function updateDueBadge(){
+    var count = transactions.filter(function(t){
+      return t.dueDate && !t.paid;
+    }).length;
+    var badge = $("dueBadge");
+    if(count > 0){
+      badge.textContent = count > 99 ? "99+" : String(count);
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
   }
 
   $("openDueBtn").addEventListener("click", function(){
@@ -2681,14 +2733,12 @@
     return new Date(year, month, Math.min(day, lastDay));
   }
 
-  function currentInvoiceForCard(card){
+  function invoiceCycleForRefDate(card, refDate){
     if(!card.closingDay) return null;
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-    var y = today.getFullYear(), m = today.getMonth();
+    var y = refDate.getFullYear(), m = refDate.getMonth();
     var closeThis = dayInMonth(y, m, card.closingDay);
     var closeDate, closeY, closeM;
-    if(today <= closeThis){
+    if(refDate <= closeThis){
       closeDate = closeThis; closeY = y; closeM = m;
     } else {
       closeM = m + 1; closeY = y;
@@ -2701,14 +2751,6 @@
     var startDate = new Date(prevClose);
     startDate.setDate(startDate.getDate() + 1);
 
-    var startStr = isoDate(startDate), endStr = isoDate(closeDate);
-    var total = 0;
-    transactions.forEach(function(t){
-      if(t.card !== card.id) return;
-      if(t.date < startStr || t.date > endStr) return;
-      total += (t.type === "out" ? t.amount : -t.amount);
-    });
-
     var dueDate = closeDate;
     if(card.dueDay){
       dueDate = dayInMonth(closeY, closeM, card.dueDay);
@@ -2718,8 +2760,29 @@
         dueDate = dayInMonth(dy, dm, card.dueDay);
       }
     }
+    return {startDate: startDate, closeDate: closeDate, closeY: closeY, closeM: closeM, dueDate: dueDate};
+  }
 
-    return {startDate: startDate, closeDate: closeDate, dueDate: dueDate, total: Math.max(0, total)};
+  function invoiceDueDateForTransaction(card, txDateStr){
+    if(!card || !card.closingDay) return null;
+    var txDate = new Date(txDateStr + "T00:00:00");
+    var cycle = invoiceCycleForRefDate(card, txDate);
+    return cycle ? cycle.dueDate : null;
+  }
+
+  function currentInvoiceForCard(card){
+    if(!card.closingDay) return null;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var cycle = invoiceCycleForRefDate(card, today);
+    var startStr = isoDate(cycle.startDate), endStr = isoDate(cycle.closeDate);
+    var total = 0;
+    transactions.forEach(function(t){
+      if(t.card !== card.id) return;
+      if(t.date < startStr || t.date > endStr) return;
+      total += (t.type === "out" ? t.amount : -t.amount);
+    });
+    return {startDate: cycle.startDate, closeDate: cycle.closeDate, dueDate: cycle.dueDate, total: Math.max(0, total)};
   }
 
   function renderCards(){
@@ -3087,6 +3150,11 @@
       var cat = tr.querySelector(".inv-cat").value;
       var amount = Math.round(parseFloat(tr.querySelector(".inv-amount").value || "0") * 100) / 100;
       if(!date || !desc || !amount) return;
+      var dueDate = "";
+      if(targetCard && targetCard.closingDay){
+        var due = invoiceDueDateForTransaction(targetCard, date);
+        if(due) dueDate = isoDate(due);
+      }
       transactions.push({
         id: uid(),
         type: type,
@@ -3095,7 +3163,9 @@
         person: defaultPerson,
         card: invoiceTargetCardId,
         amount: amount,
-        date: date
+        date: date,
+        dueDate: dueDate,
+        paid: !dueDate
       });
       added++;
     });
