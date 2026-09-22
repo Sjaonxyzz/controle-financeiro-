@@ -6,7 +6,7 @@
 <title>FINANÇAS.GG — controle de entradas e saídas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -24,12 +24,17 @@
     --expense:#c06a4d;
     --expense-dim:#4a352c;
     --gold:#d9a544;
-    --radius:3px;
-    --serif:'Fraunces', Georgia, serif;
+    --radius:10px;
+    --display:'Anton', 'Public Sans', sans-serif;
     --sans:'Public Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   }
   *{box-sizing:border-box;}
   [hidden]{display:none !important;}
+  h1, h2, h3{
+    font-family:var(--display);
+    text-transform:uppercase;
+    letter-spacing:.02em;
+  }
   html{-webkit-font-smoothing:antialiased;max-width:100%;overflow-x:hidden;}
   body{
     margin:0;
@@ -57,12 +62,14 @@
   }
   .brand svg{flex:none;}
   .brand h1{
-    font-family:var(--serif);
-    font-weight:500;
-    font-size:22px;
+    font-family:var(--display);
+    font-weight:400;
+    font-size:26px;
     margin:0;
-    letter-spacing:.2px;
+    letter-spacing:.03em;
+    text-transform:uppercase;
   }
+  .brand h1 .accent{color:var(--gold);}
   .brand p{
     margin:0;
     font-size:12px;
@@ -130,16 +137,18 @@
 
   .panel{
     border:1px solid var(--line);
-    border-radius:8px;
+    border-radius:16px;
     padding:20px 22px;
     background:var(--panel);
   }
   .panel.dashboard-section{margin-bottom:0;padding-bottom:20px;border-bottom:none;}
   .panel h2{
-    font-family:var(--serif);
-    font-weight:500;
-    font-size:16px;
+    font-family:var(--display);
+    font-weight:400;
+    font-size:17px;
     margin:0 0 12px;
+    letter-spacing:.02em;
+    text-transform:uppercase;
   }
 
   .month-row{
@@ -171,7 +180,7 @@
     margin:0 0 6px;
   }
   .balance-value{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-size:40px;
     font-weight:500;
     margin:0;
@@ -194,7 +203,7 @@
 
   .breakdown{margin-top:0;}
   .breakdown h2{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:15px;
     margin:0 0 12px;
@@ -300,7 +309,7 @@
     border-bottom:1px solid var(--line);
   }
   .dashboard-section h2{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:18px;
     margin:0 0 3px;
@@ -360,7 +369,7 @@
     margin:0 0 4px;
   }
   .month-stat .value{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:28px;
     margin:0;
@@ -421,7 +430,7 @@
     border-top:1px solid var(--line);
   }
   .theme-picker h2{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:15px;
     margin:0 0 12px;
@@ -537,7 +546,7 @@
     margin-bottom:10px;
   }
   .tool-widget-head h2{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:15px;
     margin:0;
@@ -567,7 +576,7 @@
     margin-bottom:10px;
     padding:10px;
     border:1px solid var(--line);
-    border-radius:6px;
+    border-radius:12px;
     background:var(--panel-2);
     cursor:pointer;
   }
@@ -658,7 +667,7 @@
     margin:0 0 3px;
   }
   .due-summary-item .value{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:20px;
     margin:0;
@@ -723,7 +732,7 @@
     flex-wrap:wrap;
   }
   .main-head h2{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:22px;
     margin:0;
@@ -807,12 +816,12 @@
     text-align:center;
     color:var(--muted);
   }
-  .ledger-empty strong{display:block;color:var(--paper);font-family:var(--serif);font-size:18px;font-weight:500;margin-bottom:6px;}
+  .ledger-empty strong{display:block;color:var(--paper);font-family:var(--display);font-size:18px;font-weight:500;margin-bottom:6px;}
 
   /* ---------- dialog / form ---------- */
   dialog{
     border:1px solid var(--line);
-    border-radius:6px;
+    border-radius:12px;
     background:var(--panel);
     color:var(--paper);
     padding:0;
@@ -827,7 +836,7 @@
     max-height:360px;
     overflow-y:auto;
     border:1px solid var(--line);
-    border-radius:6px;
+    border-radius:12px;
     margin-bottom:10px;
   }
   .invoice-table{
@@ -867,7 +876,7 @@
   .invoice-table input[type="checkbox"]{width:auto;}
   .invoice-row-skip{opacity:.4;}
   .dialog-inner h3{
-    font-family:var(--serif);
+    font-family:var(--display);
     font-weight:500;
     font-size:20px;
     margin:0 0 20px;
@@ -954,16 +963,17 @@
   .auth-card{
     width:min(380px, 100%);
     border:1px solid var(--line);
-    border-radius:6px;
+    border-radius:12px;
     background:var(--panel);
     padding:32px;
   }
   .auth-card h1{
-    font-family:var(--serif);
-    font-weight:500;
-    font-size:26px;
+    font-family:var(--display);
+    font-weight:400;
+    font-size:30px;
     margin:0 0 6px;
   }
+  .auth-card h1 .accent{color:var(--gold);}
   .auth-card > p{
     font-size:13px;
     color:var(--muted);
@@ -1019,7 +1029,7 @@
 
 <div class="auth-screen" id="authScreen">
   <div class="auth-card">
-    <h1>FINANÇAS.GG</h1>
+    <h1>FINANÇAS<span class="accent">.GG</span></h1>
     <p>Entre para acessar seus lançamentos em qualquer aparelho.</p>
 
     <div class="auth-tabs">
@@ -1056,7 +1066,7 @@
       <line x1="6" y1="21" x2="20" y2="21" style="stroke:var(--muted)" stroke-width="1.2"/>
     </svg>
     <div>
-      <h1>FINANÇAS.GG</h1>
+      <h1>FINANÇAS<span class="accent">.GG</span></h1>
       <p>sincronizado na sua conta</p>
     </div>
   </div>
