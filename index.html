@@ -781,6 +781,10 @@
     border-collapse:collapse;
     font-size:14px;
   }
+  .ledger-main-table{table-layout:fixed;}
+  .ledger-main-table td{overflow-wrap:break-word;}
+  .ledger-desc-text{display:block;}
+  .ledger-desc-due{display:block;margin-top:4px;}
   thead th{
     text-align:left;
     font-weight:600;
@@ -1239,15 +1243,15 @@
         </div>
       </div>
 
-      <table>
+      <table class="ledger-main-table">
         <thead>
           <tr>
-            <th>Data</th>
-            <th>Descrição</th>
-            <th>Categoria</th>
-            <th>Quem</th>
-            <th class="num">Valor</th>
-            <th></th>
+            <th style="width:10%;">Data</th>
+            <th style="width:34%;">Descrição</th>
+            <th style="width:16%;">Categoria</th>
+            <th style="width:14%;">Quem</th>
+            <th class="num" style="width:16%;">Valor</th>
+            <th style="width:4%;"></th>
           </tr>
         </thead>
         <tbody id="ledgerBody"></tbody>
@@ -2470,11 +2474,11 @@
       if(t.dueDate && !t.paid){
         var st = dueStatusOf(t);
         var stLabel = st === "late" ? "Atrasado" : "Vence " + dateFmt.format(new Date(t.dueDate + "T00:00:00Z"));
-        dueTag = ' <span class="due-status-chip due-status-' + st + '">' + stLabel + '</span>';
+        dueTag = '<span class="due-status-chip due-status-' + st + ' ledger-desc-due">' + stLabel + '</span>';
       }
       tr.innerHTML =
         '<td>' + dateFmt.format(new Date(t.date + "T00:00:00Z")) + '</td>' +
-        '<td>' + escapeHtml(t.description) + dueTag + '</td>' +
+        '<td><span class="ledger-desc-text">' + escapeHtml(t.description) + '</span>' + dueTag + '</td>' +
         '<td><span class="cat-chip">' + escapeHtml(t.category) + '</span>' + cardTag + '</td>' +
         '<td><span class="cat-chip">' + escapeHtml(t.person || "—") + '</span></td>' +
         '<td class="num ' + t.type + '">' + (t.type === "in" ? "+ " : "− ") + fmt.format(t.amount) + '</td>' +
@@ -2605,8 +2609,9 @@
   }
 
   function updateDueBadge(){
+    var today = todayISO();
     var count = transactions.filter(function(t){
-      return t.dueDate && !t.paid;
+      return t.dueDate && !t.paid && t.dueDate < today;
     }).length;
     var badge = $("dueBadge");
     if(count > 0){
