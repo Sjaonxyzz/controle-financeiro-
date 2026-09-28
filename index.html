@@ -1118,6 +1118,7 @@
     <span class="user-badge" id="userBadge"></span>
     <button class="btn btn-ghost" id="managePeopleBtn">👤 Responsáveis</button>
     <button class="btn btn-ghost" id="manageCatBtn">⚙ Categorias</button>
+    <button class="btn btn-ghost" id="openRecurringBtn">Despesas Fixas</button>
     <button class="btn btn-ghost" id="openDueBtn">Vencimentos<span class="due-badge" id="dueBadge" hidden>0</span></button>
     <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
     <button class="btn btn-ghost" id="logoutBtn">Sair</button>
@@ -1520,6 +1521,65 @@
   </div>
 </dialog>
 
+<dialog id="recurringDialog">
+  <div class="dialog-inner">
+    <h3>Despesas fixas</h3>
+    <p class="tool-empty" style="margin-bottom:14px;">Configure aqui uma vez e elas são lançadas sozinhas todo mês, no dia escolhido, sempre que você abrir o app.</p>
+    <div id="recurringList"></div>
+    <p class="tool-empty" id="recurringEmpty" hidden>Nenhuma despesa fixa cadastrada ainda.</p>
+    <button type="button" class="btn btn-ghost" id="addRecurringBtn" style="width:100%;margin-top:14px;">+ Nova despesa fixa</button>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-primary" id="closeRecurringDialog">Fechar</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="recurringFormDialog">
+  <div class="dialog-inner">
+    <h3 id="recurringFormTitle">Nova despesa fixa</h3>
+    <form id="recurringForm">
+      <input type="hidden" id="recurringId">
+      <div class="field">
+        <label for="recurringDesc">Descrição</label>
+        <input type="text" id="recurringDesc" required placeholder="Ex.: Aluguel, Internet, Academia...">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="recurringAmount">Valor (R$)</label>
+          <input type="number" id="recurringAmount" step="0.01" min="0" required>
+        </div>
+        <div class="field">
+          <label for="recurringDay">Dia do mês</label>
+          <input type="number" id="recurringDay" min="1" max="31" required placeholder="Ex.: 5">
+        </div>
+      </div>
+      <div class="field">
+        <label for="recurringCategory">Categoria</label>
+        <select id="recurringCategory"></select>
+      </div>
+      <div class="field">
+        <label for="recurringPerson">Responsável</label>
+        <select id="recurringPerson"></select>
+      </div>
+      <div class="field">
+        <label for="recurringCard">Cartão (opcional)</label>
+        <select id="recurringCard">
+          <option value="">Nenhum (dinheiro/Pix/débito)</option>
+        </select>
+      </div>
+      <label class="due-toggle-field" for="recurringActive">
+        <input type="checkbox" id="recurringActive" checked>
+        <span>Ativa (lançar automaticamente todo mês)</span>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="deleteRecurringBtn" hidden style="margin-right:auto;">Excluir</button>
+        <button type="button" class="btn" id="cancelRecurringBtn">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
 <dialog id="dueDialog">
   <div class="dialog-inner due-dialog-inner">
     <h3>Vencimentos</h3>
@@ -1627,6 +1687,7 @@
   var STORAGE_PEOPLE = "livrocaixa_people";
   var STORAGE_CARDS = "livrocaixa_cards";
   var STORAGE_GOALS = "livrocaixa_goals";
+  var STORAGE_RECURRING = "livrocaixa_recurring";
 
   var defaultCategories = {
     in: ["Salário", "Freelance", "Investimentos", "Outros"],
@@ -1715,6 +1776,7 @@
         people: people,
         cards: cards,
         goals: goals,
+        recurring: recurring,
         theme: currentThemeKey,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, {merge: true}).catch(function(err){
@@ -1729,8 +1791,10 @@
   if(!Array.isArray(people) || !people.length) people = defaultPeople.slice();
   var cards = loadJSON(STORAGE_CARDS, []);
   var goals = loadJSON(STORAGE_GOALS, []);
+  var recurring = loadJSON(STORAGE_RECURRING, []);
   if(!Array.isArray(cards)) cards = [];
   if(!Array.isArray(goals)) goals = [];
+  if(!Array.isArray(recurring)) recurring = [];
 
   var currentType = "out";
   var editingId = null;
@@ -2653,6 +2717,184 @@
     }
   }
 
+  // ---------- despesas fixas ----------
+  function processRecurringExpenses(){
+    var todayStr = todayISO();
+    var todayDay = parseInt(todayStr.slice(8, 10), 10);
+    var currentMonthKey = todayStr.slice(0, 7);
+    var changed = false;
+
+    recurring.forEach(function(r){
+      if(r.active === false) return;
+      if(r.lastGeneratedMonth === currentMonthKey) return;
+      if(todayDay < r.day) return;
+
+      var yearNum = parseInt(currentMonthKey.slice(0, 4), 10);
+      var monthNum = parseInt(currentMonthKey.slice(5, 7), 10);
+      var lastDayOfMonth = new Date(yearNum, monthNum, 0).getDate();
+      var day = Math.min(r.day, lastDayOfMonth);
+      var dateStr = currentMonthKey + "-" + String(day).padStart(2, "0");
+
+      var card = r.card ? cards.filter(function(c){ return c.id === r.card; })[0] : null;
+      var dueDate = "";
+      if(card && card.closingDay){
+        var due = invoiceDueDateForTransaction(card, dateStr);
+        if(due) dueDate = isoDate(due);
+      }
+
+      transactions.push({
+        id: uid(),
+        type: "out",
+        description: r.description,
+        category: r.category,
+        person: r.person,
+        card: r.card || "",
+        amount: r.amount,
+        date: dateStr,
+        dueDate: dueDate,
+        paid: !dueDate,
+        recurringId: r.id
+      });
+      r.lastGeneratedMonth = currentMonthKey;
+      changed = true;
+    });
+
+    if(changed){
+      saveJSON(STORAGE_TX, transactions);
+      saveJSON(STORAGE_RECURRING, recurring);
+    }
+  }
+
+  var recurringDialog = $("recurringDialog");
+  var recurringFormDialog = $("recurringFormDialog");
+  var recurringForm = $("recurringForm");
+  var editingRecurringId = null;
+
+  function refreshRecurringCategorySelect(selected){
+    var sel = $("recurringCategory");
+    sel.innerHTML = "";
+    categories.out.forEach(function(c){
+      var opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
+    });
+    if(selected && categories.out.indexOf(selected) !== -1) sel.value = selected;
+  }
+  function refreshRecurringPersonSelect(selected){
+    var sel = $("recurringPerson");
+    sel.innerHTML = "";
+    people.forEach(function(p){
+      var opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+    if(selected && people.indexOf(selected) !== -1) sel.value = selected;
+  }
+  function refreshRecurringCardSelect(selected){
+    var sel = $("recurringCard");
+    sel.innerHTML = '<option value="">Nenhum (dinheiro/Pix/débito)</option>';
+    cards.forEach(function(c){
+      var opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+    if(selected && cards.some(function(c){ return c.id === selected; })) sel.value = selected;
+  }
+
+  function renderRecurringList(){
+    var wrap = $("recurringList");
+    wrap.innerHTML = "";
+    $("recurringEmpty").hidden = recurring.length > 0;
+    recurring.forEach(function(r){
+      var el = document.createElement("div");
+      el.className = "card-item";
+      if(r.active === false) el.style.opacity = ".55";
+      el.innerHTML =
+        '<div class="card-item-head"><span class="name">' + escapeHtml(r.description) + (r.active === false ? " (pausada)" : "") + '</span></div>' +
+        '<div class="card-item-foot"><span>' + fmt.format(r.amount) + ' · todo dia ' + r.day + '</span><span>' + escapeHtml(r.category) + '</span></div>';
+      el.addEventListener("click", function(){ openRecurringForm(r); });
+      wrap.appendChild(el);
+    });
+  }
+
+  $("openRecurringBtn").addEventListener("click", function(){
+    renderRecurringList();
+    recurringDialog.showModal();
+  });
+  $("closeRecurringDialog").addEventListener("click", function(){ recurringDialog.close(); });
+  $("addRecurringBtn").addEventListener("click", function(){ openRecurringForm(null); });
+
+  function openRecurringForm(existing){
+    recurringForm.reset();
+    refreshRecurringPersonSelect(existing ? existing.person : people[0]);
+    refreshRecurringCardSelect(existing && existing.card);
+    if(existing){
+      editingRecurringId = existing.id;
+      $("recurringFormTitle").textContent = "Editar despesa fixa";
+      $("recurringId").value = existing.id;
+      $("recurringDesc").value = existing.description;
+      $("recurringAmount").value = existing.amount;
+      $("recurringDay").value = existing.day;
+      refreshRecurringCategorySelect(existing.category);
+      $("recurringActive").checked = existing.active !== false;
+      $("deleteRecurringBtn").hidden = false;
+    } else {
+      editingRecurringId = null;
+      $("recurringFormTitle").textContent = "Nova despesa fixa";
+      refreshRecurringCategorySelect(null);
+      $("recurringActive").checked = true;
+      $("deleteRecurringBtn").hidden = true;
+    }
+    recurringDialog.close();
+    recurringFormDialog.showModal();
+  }
+
+  $("cancelRecurringBtn").addEventListener("click", function(){
+    recurringFormDialog.close();
+    recurringDialog.showModal();
+  });
+  $("deleteRecurringBtn").addEventListener("click", function(){
+    if(!editingRecurringId) return;
+    recurring = recurring.filter(function(r){ return r.id !== editingRecurringId; });
+    saveJSON(STORAGE_RECURRING, recurring);
+    recurringFormDialog.close();
+    recurringDialog.showModal();
+    renderRecurringList();
+  });
+  recurringForm.addEventListener("submit", function(e){
+    e.preventDefault();
+    var record = {
+      id: editingRecurringId || uid(),
+      description: $("recurringDesc").value.trim(),
+      amount: Math.round(parseFloat($("recurringAmount").value || "0") * 100) / 100,
+      day: Math.min(31, Math.max(1, parseInt($("recurringDay").value || "1", 10))),
+      category: $("recurringCategory").value,
+      person: $("recurringPerson").value,
+      card: $("recurringCard").value || "",
+      active: $("recurringActive").checked,
+      lastGeneratedMonth: (editingRecurringId && recurring.filter(function(r){ return r.id === editingRecurringId; })[0] || {}).lastGeneratedMonth || null
+    };
+    if(!record.description || !record.amount){ return; }
+    if(editingRecurringId){
+      recurring = recurring.map(function(r){ return r.id === editingRecurringId ? record : r; });
+    } else {
+      var nowStr = todayISO();
+      if(parseInt(nowStr.slice(8, 10), 10) >= record.day){
+        record.lastGeneratedMonth = nowStr.slice(0, 7);
+      }
+      recurring.push(record);
+    }
+    saveJSON(STORAGE_RECURRING, recurring);
+    processRecurringExpenses();
+    renderAll();
+    recurringFormDialog.close();
+    recurringDialog.showModal();
+    renderRecurringList();
+  });
+
   $("openDueBtn").addEventListener("click", function(){
     renderDueList();
     dueDialog.showModal();
@@ -3334,7 +3576,7 @@
   }
 
   $("exportBtn").addEventListener("click", function(){
-    var data = {transactions: transactions, categories: categories, people: people, cards: cards, goals: goals};
+    var data = {transactions: transactions, categories: categories, people: people, cards: cards, goals: goals, recurring: recurring};
     download("financas-backup.json", JSON.stringify(data, null, 2), "application/json");
   });
 
@@ -3376,6 +3618,10 @@
         if(Array.isArray(data.goals)){
           goals = data.goals;
           saveJSON(STORAGE_GOALS, goals);
+        }
+        if(Array.isArray(data.recurring)){
+          recurring = data.recurring;
+          saveJSON(STORAGE_RECURRING, recurring);
         }
         renderAll();
       }catch(err){
@@ -3477,6 +3723,7 @@
         if(Array.isArray(data.people) && data.people.length) people = data.people;
         if(Array.isArray(data.cards)) cards = data.cards;
         if(Array.isArray(data.goals)) goals = data.goals;
+        if(Array.isArray(data.recurring)) recurring = data.recurring;
         if(data.theme && THEMES[data.theme]) currentThemeKey = data.theme;
         try{
           localStorage.setItem(STORAGE_TX, JSON.stringify(transactions));
@@ -3484,6 +3731,7 @@
           localStorage.setItem(STORAGE_PEOPLE, JSON.stringify(people));
           localStorage.setItem(STORAGE_CARDS, JSON.stringify(cards));
           localStorage.setItem(STORAGE_GOALS, JSON.stringify(goals));
+          localStorage.setItem(STORAGE_RECURRING, JSON.stringify(recurring));
           localStorage.setItem(STORAGE_THEME, JSON.stringify(currentThemeKey));
         }catch(e){}
       } else {
@@ -3497,6 +3745,7 @@
       refreshCategorySelect();
       refreshPersonSelect();
       refreshCardSelect();
+      processRecurringExpenses();
       renderAll();
     });
   }
