@@ -422,6 +422,104 @@
     display:flex;
     align-items:center;
     gap:10px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+
+  /* ---------- menu "Mais" (ações secundárias) ---------- */
+  .more-menu-wrap{position:relative;}
+  .more-menu-btn{display:none;}
+  .more-menu-dots{display:none;}
+  .more-menu-panel{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .more-menu-item{
+    font-family:var(--sans);
+    font-size:14px;
+    font-weight:600;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    padding:10px 16px;
+    border-radius:var(--radius);
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+  }
+  .more-menu-item:hover{border-color:var(--gold);}
+  .more-menu-logout{color:var(--expense);}
+
+  .fab-new-btn{display:none;}
+
+  @media (max-width:860px){
+    .topbar{flex-wrap:wrap;gap:10px;padding:16px 18px;}
+    .brand p{display:none;}
+    .user-badge{max-width:120px;}
+    #openFormBtn{display:none;}
+
+    .more-menu-btn{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      position:relative;
+    }
+    .more-menu-dots{display:inline;font-size:16px;line-height:1;}
+    .more-menu-text{display:none;}
+    .more-menu-panel{
+      display:none;
+      position:absolute;
+      top:calc(100% + 8px);
+      right:0;
+      flex-direction:column;
+      align-items:stretch;
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px;
+      min-width:210px;
+      box-shadow:0 14px 34px rgba(0,0,0,.45);
+      z-index:60;
+    }
+    .more-menu-panel.open{display:flex;}
+    .more-menu-item{
+      background:none;
+      border:none;
+      justify-content:space-between;
+      text-align:left;
+      border-radius:8px;
+    }
+    .more-menu-item:hover{background:var(--panel-2);}
+    .more-menu-logout{
+      margin-top:4px;
+      padding-top:12px;
+      border-top:1px solid var(--line);
+    }
+
+    .fab-new-btn{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:fixed;
+      bottom:22px;
+      right:20px;
+      width:56px;
+      height:56px;
+      border-radius:50%;
+      background:var(--gold);
+      color:#1c1204;
+      font-size:30px;
+      font-weight:700;
+      border:none;
+      box-shadow:0 10px 26px rgba(0,0,0,.45);
+      cursor:pointer;
+      z-index:55;
+      line-height:1;
+      padding-bottom:3px;
+    }
   }
 
   .theme-picker{
@@ -1116,14 +1214,25 @@
   </div>
   <div class="topbar-actions">
     <span class="user-badge" id="userBadge"></span>
-    <button class="btn btn-ghost" id="managePeopleBtn">👤 Responsáveis</button>
-    <button class="btn btn-ghost" id="manageCatBtn">⚙ Categorias</button>
-    <button class="btn btn-ghost" id="openRecurringBtn">Despesas Fixas</button>
-    <button class="btn btn-ghost" id="openDueBtn">Vencimentos<span class="due-badge" id="dueBadge" hidden>0</span></button>
+    <div class="more-menu-wrap">
+      <button class="btn btn-ghost more-menu-btn" id="moreMenuBtn" aria-label="Mais opções" aria-haspopup="true" aria-expanded="false">
+        <span class="more-menu-dots">⋯</span>
+        <span class="more-menu-text">Mais</span>
+        <span class="due-badge" id="dueBadgeMore" hidden>0</span>
+      </button>
+      <div class="more-menu-panel" id="moreMenuPanel">
+        <button class="more-menu-item" id="managePeopleBtn">👤 Responsáveis</button>
+        <button class="more-menu-item" id="manageCatBtn">⚙ Categorias</button>
+        <button class="more-menu-item" id="openRecurringBtn">Despesas Fixas</button>
+        <button class="more-menu-item" id="openDueBtn">Vencimentos<span class="due-badge" id="dueBadge" hidden>0</span></button>
+        <button class="more-menu-item more-menu-logout" id="logoutBtn">Sair</button>
+      </div>
+    </div>
     <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
-    <button class="btn btn-ghost" id="logoutBtn">Sair</button>
   </div>
 </header>
+
+<button class="fab-new-btn" id="fabNewBtn" aria-label="Novo lançamento">+</button>
 
 <div class="layout">
   <aside>
@@ -2208,6 +2317,27 @@
   }
 
   $("openFormBtn").addEventListener("click", function(){ openForm(null); });
+  $("fabNewBtn").addEventListener("click", function(){ openForm(null); });
+
+  var moreMenuBtn = $("moreMenuBtn");
+  var moreMenuPanel = $("moreMenuPanel");
+  moreMenuBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    var open = moreMenuPanel.classList.toggle("open");
+    moreMenuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  moreMenuPanel.addEventListener("click", function(e){
+    if(e.target.closest(".more-menu-item")){
+      moreMenuPanel.classList.remove("open");
+      moreMenuBtn.setAttribute("aria-expanded", "false");
+    }
+  });
+  document.addEventListener("click", function(e){
+    if(!e.target.closest(".more-menu-wrap")){
+      moreMenuPanel.classList.remove("open");
+      moreMenuBtn.setAttribute("aria-expanded", "false");
+    }
+  });
   $("cancelFormBtn").addEventListener("click", function(){ formDialog.close(); });
 
   $("txHasDue").addEventListener("change", function(){
@@ -2708,13 +2838,14 @@
     var count = transactions.filter(function(t){
       return t.dueDate && !t.paid && t.dueDate < today;
     }).length;
-    var badge = $("dueBadge");
-    if(count > 0){
-      badge.textContent = count > 99 ? "99+" : String(count);
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
-    }
+    [$("dueBadge"), $("dueBadgeMore")].forEach(function(badge){
+      if(count > 0){
+        badge.textContent = count > 99 ? "99+" : String(count);
+        badge.hidden = false;
+      } else {
+        badge.hidden = true;
+      }
+    });
   }
 
   // ---------- despesas fixas ----------
