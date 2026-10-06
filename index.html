@@ -131,8 +131,24 @@
     gap:20px;
   }
   @media (max-width:820px){
-    .layout{grid-template-columns:1fr;}
-    aside{position:static;border-right:none;border-bottom:1px solid var(--line);}
+    .layout{
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+      padding:16px 16px 90px;
+    }
+    aside, main, .month-row, .side-tools{display:contents;}
+
+    #panelLancamentos{order:1;}
+    #panelSaldo{order:2;}
+    #panelResumoMes{order:3;}
+    #panelCartoes{order:4;}
+    #panelMetas{order:5;}
+    #panelCategoria{order:6;}
+    #panelResponsavel{order:7;}
+    #panelChart{order:8;}
+    #panelPaleta{order:9;}
+    #panelBackup{order:10;}
   }
 
   .panel{
@@ -1236,7 +1252,7 @@
 
 <div class="layout">
   <aside>
-    <div class="panel">
+    <div class="panel" id="panelSaldo">
       <p class="balance-label">Saldo atual</p>
       <p class="balance-value" id="balanceValue">R$ 0,00</p>
       <div class="stat-row">
@@ -1249,7 +1265,7 @@
       </div>
     </div>
 
-    <div class="panel breakdown">
+    <div class="panel breakdown" id="panelCategoria">
       <div class="breakdown-head">
         <h2>Por categoria</h2>
         <div class="mini-toggle">
@@ -1263,17 +1279,17 @@
       </div>
     </div>
 
-    <div class="panel breakdown">
+    <div class="panel breakdown" id="panelResponsavel">
       <h2>Saldo por responsável</h2>
       <div id="peopleBreakdownList"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panelPaleta">
       <h2 class="panel-title">Paleta de cores</h2>
       <div class="theme-swatches" id="themeSwatches"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panelBackup">
       <div class="data-actions">
         <button class="btn btn-ghost" id="exportBtn">↓ Exportar backup (.json)</button>
         <button class="btn btn-ghost" id="importBtn">↑ Importar backup (.json)</button>
@@ -1285,7 +1301,7 @@
 
   <main>
     <div class="month-row">
-      <div class="panel dashboard-section month-summary">
+      <div class="panel dashboard-section month-summary" id="panelResumoMes">
         <div class="month-summary-head">
           <div>
             <h2>Resumo do mês</h2>
@@ -1316,7 +1332,7 @@
       </div>
 
       <div class="side-tools">
-        <div class="panel">
+        <div class="panel" id="panelCartoes">
           <div class="tool-widget-head">
             <h2>Cartões</h2>
             <button type="button" class="icon-btn" id="addCardBtn" title="Adicionar cartão">+</button>
@@ -1325,7 +1341,7 @@
           <p class="tool-empty" id="cardsEmpty" hidden>Nenhum cartão cadastrado ainda.</p>
         </div>
 
-        <div class="panel">
+        <div class="panel" id="panelMetas">
           <div class="tool-widget-head">
             <h2>Metas</h2>
             <button type="button" class="icon-btn" id="addGoalBtn" title="Adicionar meta">+</button>
@@ -1336,7 +1352,7 @@
       </div>
     </div>
 
-    <div class="panel dashboard-section">
+    <div class="panel dashboard-section" id="panelChart">
       <h2>Entradas x Saídas</h2>
       <p class="sub">Últimos 6 meses</p>
       <div class="chart-legend-row">
@@ -1346,7 +1362,7 @@
       <div id="monthChartWrap"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="panelLancamentos">
       <div class="main-head">
         <h2>Lançamentos</h2>
         <div class="filters">
