@@ -137,18 +137,14 @@
       gap:18px;
       padding:16px 16px 90px;
     }
-    aside, main, .month-row, .side-tools{display:contents;}
-
-    #panelLancamentos{order:1;}
-    #panelSaldo{order:2;}
-    #panelResumoMes{order:3;}
-    #panelCartoes{order:4;}
-    #panelMetas{order:5;}
-    #panelCategoria{order:6;}
-    #panelResponsavel{order:7;}
-    #panelChart{order:8;}
-    #panelPaleta{order:9;}
-    #panelBackup{order:10;}
+    aside, main{
+      display:block;
+      padding:0;
+      border:none;
+      position:static;
+    }
+    .month-row{display:block;}
+    .side-tools{display:block;}
   }
 
   .panel{
@@ -1237,8 +1233,8 @@
         <span class="due-badge" id="dueBadgeMore" hidden>0</span>
       </button>
       <div class="more-menu-panel" id="moreMenuPanel">
-        <button class="more-menu-item" id="managePeopleBtn">👤 Responsáveis</button>
-        <button class="more-menu-item" id="manageCatBtn">⚙ Categorias</button>
+        <button class="more-menu-item" id="managePeopleBtn">Responsáveis</button>
+        <button class="more-menu-item" id="manageCatBtn">Categorias</button>
         <button class="more-menu-item" id="openRecurringBtn">Despesas Fixas</button>
         <button class="more-menu-item" id="openDueBtn">Vencimentos<span class="due-badge" id="dueBadge" hidden>0</span></button>
         <button class="more-menu-item more-menu-logout" id="logoutBtn">Sair</button>
@@ -3913,6 +3909,64 @@
       $("appShell").style.display = "none";
       $("authScreen").style.display = "flex";
     }
+  });
+
+  // ---------- ordem responsiva (move os blocos de verdade, sem truque de CSS) ----------
+  var MOBILE_ORDER = ["panelLancamentos", "panelSaldo", "panelResumoMes", "panelCartoes", "panelMetas", "panelCategoria", "panelResponsavel", "panelChart", "panelPaleta", "panelBackup"];
+  var isMobileLayout = null;
+
+  function moveToMobileOrder(){
+    var layoutEl = document.querySelector(".layout");
+    if(!layoutEl) return;
+    MOBILE_ORDER.forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) layoutEl.appendChild(el);
+    });
+  }
+
+  function moveToDesktopOrder(){
+    var asideEl = document.querySelector(".layout > aside");
+    var mainEl = document.querySelector(".layout > main");
+    if(!asideEl || !mainEl) return;
+    var monthRowEl = mainEl.querySelector(".month-row");
+    var sideToolsEl = monthRowEl ? monthRowEl.querySelector(".side-tools") : null;
+
+    ["panelSaldo", "panelCategoria", "panelResponsavel", "panelPaleta", "panelBackup"].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) asideEl.appendChild(el);
+    });
+
+    if(monthRowEl && sideToolsEl){
+      var resumo = document.getElementById("panelResumoMes");
+      if(resumo) monthRowEl.insertBefore(resumo, sideToolsEl);
+      ["panelCartoes", "panelMetas"].forEach(function(id){
+        var el = document.getElementById(id);
+        if(el) sideToolsEl.appendChild(el);
+      });
+    }
+
+    var chartEl = document.getElementById("panelChart");
+    var lancEl = document.getElementById("panelLancamentos");
+    if(chartEl) mainEl.appendChild(chartEl);
+    if(lancEl) mainEl.appendChild(lancEl);
+  }
+
+  function applyResponsiveOrder(){
+    var mobile = window.matchMedia("(max-width:820px)").matches;
+    if(mobile === isMobileLayout) return;
+    isMobileLayout = mobile;
+    if(mobile){
+      moveToMobileOrder();
+    } else {
+      moveToDesktopOrder();
+    }
+  }
+
+  applyResponsiveOrder();
+  var resizeOrderTimer = null;
+  window.addEventListener("resize", function(){
+    clearTimeout(resizeOrderTimer);
+    resizeOrderTimer = setTimeout(applyResponsiveOrder, 200);
   });
 })();
 </script>
