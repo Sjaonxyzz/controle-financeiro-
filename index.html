@@ -472,11 +472,75 @@
 
   .fab-new-btn{display:none;}
 
+  /* ---------- lançamento por voz ---------- */
+  .voice-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+  }
+  .voice-btn svg{flex:none;}
+  dialog#voiceDialog{width:min(420px, 92vw);}
+  .voice-dialog-inner{text-align:center;}
+  .voice-mic{
+    width:84px;
+    height:84px;
+    margin:6px auto 16px;
+    border-radius:50%;
+    background:var(--gold);
+    color:#1c1204;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+  .voice-mic.listening::after{
+    content:"";
+    position:absolute;
+    inset:-8px;
+    border-radius:50%;
+    border:2px solid var(--gold);
+    animation:voicePulse 1.3s ease-out infinite;
+  }
+  .voice-mic.error{background:var(--expense);color:#fff;}
+  @keyframes voicePulse{
+    0%{transform:scale(.85);opacity:.9;}
+    100%{transform:scale(1.35);opacity:0;}
+  }
+  .voice-status{font-size:15px;font-weight:600;margin:0 0 8px;}
+  .voice-transcript{
+    min-height:46px;
+    font-size:16px;
+    font-style:italic;
+    margin:0 0 10px;
+    overflow-wrap:break-word;
+  }
+  .voice-tip{margin:0 0 6px;}
+  @media (prefers-reduced-motion:reduce){
+    .voice-mic.listening::after{animation:none;}
+  }
+
   @media (max-width:860px){
     .topbar{flex-wrap:wrap;gap:10px;padding:16px 18px;}
     .brand p{display:none;}
     .user-badge{max-width:120px;}
     #openFormBtn{display:none;}
+
+    .voice-btn{
+      position:fixed;
+      bottom:90px;
+      right:24px;
+      width:48px;
+      height:48px;
+      padding:0;
+      justify-content:center;
+      border-radius:50%;
+      background:var(--panel-2);
+      border:2px solid var(--gold);
+      color:var(--gold);
+      box-shadow:0 8px 22px rgba(0,0,0,.45);
+      z-index:55;
+    }
+    .voice-btn span{display:none;}
 
     .more-menu-btn{
       display:inline-flex;
@@ -1245,6 +1309,10 @@
         <button class="more-menu-item more-menu-logout" id="logoutBtn">Sair</button>
       </div>
     </div>
+    <button class="btn btn-ghost voice-btn" id="voiceBtn" aria-label="Lançar por voz" title="Lançar por voz">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+      <span>Falar</span>
+    </button>
     <button class="btn btn-primary" id="openFormBtn">+ Novo lançamento</button>
   </div>
 </header>
@@ -1703,6 +1771,23 @@
         <button type="submit" class="btn btn-primary">Salvar</button>
       </div>
     </form>
+  </div>
+</dialog>
+
+<dialog id="voiceDialog">
+  <div class="dialog-inner voice-dialog-inner">
+    <h3>Lançar por voz</h3>
+    <div class="voice-mic listening" id="voiceMic">
+      <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+    </div>
+    <p class="voice-status" id="voiceStatus">Ouvindo… fale agora</p>
+    <p class="voice-transcript" id="voiceTranscript"></p>
+    <p class="tool-empty voice-tip">Exemplos: “Uber 15 reais no Nubank”, “mercado 120 e 50 ontem”, “recebi salário 3000”.</p>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="voiceCancelBtn">Cancelar</button>
+      <button type="button" class="btn" id="voiceRetryBtn" hidden>Tentar de novo</button>
+      <button type="button" class="btn btn-primary" id="voiceStopBtn">Concluir</button>
+    </div>
   </div>
 </dialog>
 
@@ -3914,6 +3999,345 @@
       $("appShell").style.display = "none";
       $("authScreen").style.display = "flex";
     }
+  });
+
+  // ---------- lançamento por voz ----------
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var voiceDialog = $("voiceDialog");
+  var voiceRec = null;
+  var voiceFinalText = "";
+  var voiceInterimText = "";
+  var voiceCancelled = false;
+  var voiceErrored = false;
+
+  var V_UNITS = {zero:0, um:1, uma:1, dois:2, duas:2, tres:3, quatro:4, cinco:5, seis:6, sete:7, oito:8, nove:9, dez:10, onze:11, doze:12, treze:13, catorze:14, quatorze:14, quinze:15, dezesseis:16, dezessete:17, dezoito:18, dezenove:19};
+  var V_TENS = {vinte:20, trinta:30, quarenta:40, cinquenta:50, sessenta:60, setenta:70, oitenta:80, noventa:90};
+  var V_HUND = {cem:100, cento:100, duzentos:200, duzentas:200, trezentos:300, trezentas:300, quatrocentos:400, quatrocentas:400, quinhentos:500, quinhentas:500, seiscentos:600, seiscentas:600, setecentos:700, setecentas:700, oitocentos:800, oitocentas:800, novecentos:900, novecentas:900};
+  var V_CURRENCY = {reais:1, real:1, conto:1, contos:1, pila:1, pilas:1};
+  var V_STOP = {no:1, na:1, nos:1, nas:1, de:1, do:1, da:1, dos:1, das:1, com:1, em:1, um:1, uma:1, o:1, a:1, os:1, as:1, pra:1, para:1, pro:1, pelo:1, pela:1, por:1, que:1, e:1, cartao:1, credito:1, debito:1, reais:1, real:1, "r$":1};
+
+  function vHas(obj, k){ return Object.prototype.hasOwnProperty.call(obj, k); }
+  function vNorm(s){ return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+  function vKey(s){ return vNorm(s).replace(/[^a-z0-9]/g, ""); }
+  function vIsNumWord(w){
+    return w !== undefined && (vHas(V_UNITS, w) || vHas(V_TENS, w) || vHas(V_HUND, w) || w === "mil");
+  }
+
+  function vParseNumToken(t){
+    if(t.indexOf(".") !== -1 && t.indexOf(",") !== -1){
+      t = t.replace(/\./g, "").replace(",", ".");
+    } else if(t.indexOf(",") !== -1){
+      t = t.replace(",", ".");
+    } else if(t.indexOf(".") !== -1){
+      if(/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, "");
+    }
+    return parseFloat(t);
+  }
+
+  // lê um número (em dígitos ou por extenso) a partir da posição i
+  function vNumberAt(norm, i){
+    var t = norm[i];
+    if(t === undefined) return null;
+    if(/^\d+([.,]\d+)*$/.test(t)){
+      return {value: vParseNumToken(t), len: 1, isDigit: true};
+    }
+    var j = i, total = 0, current = 0, found = false, lastWasNum = false;
+    while(j < norm.length){
+      var w = norm[j];
+      if(vHas(V_UNITS, w)){ current += V_UNITS[w]; found = true; lastWasNum = true; j++; }
+      else if(vHas(V_TENS, w)){ current += V_TENS[w]; found = true; lastWasNum = true; j++; }
+      else if(vHas(V_HUND, w)){ current += V_HUND[w]; found = true; lastWasNum = true; j++; }
+      else if(w === "mil"){ total += (current || 1) * 1000; current = 0; found = true; lastWasNum = true; j++; }
+      else if(w === "e" && lastWasNum && vIsNumWord(norm[j + 1])){ lastWasNum = false; j++; }
+      else break;
+    }
+    if(!found) return null;
+    return {value: total + current, len: j - i, isDigit: false};
+  }
+
+  function parseVoiceTransaction(text){
+    var cleaned = text.replace(/r\$\s*/gi, "r$ ").replace(/[!?;:]/g, " ").replace(/\s+/g, " ").trim();
+    var orig = cleaned.split(" ");
+    var norm = orig.map(function(t){
+      var x = vNorm(t);
+      if(x === "r$") return x;
+      return x.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
+    });
+    var count = norm.length;
+    var used = [];
+    function use(i){ used[i] = true; }
+    function useRange(start, len){ for(var q = 0; q < len; q++) use(start + q); }
+    function useBefore(idx, words){
+      var p = idx - 1;
+      while(p >= 0 && !used[p] && words.indexOf(norm[p]) !== -1){ use(p); p--; }
+    }
+    // procura um nome (de cartão, pessoa ou categoria) dentro da frase
+    function findName(names){
+      for(var a = 0; a < names.length; a++){
+        var key = vKey(names[a]);
+        if(!key) continue;
+        for(var b = 0; b < count; b++){
+          if(used[b]) continue;
+          var joined = "";
+          for(var len = 1; len <= 3 && b + len <= count; len++){
+            if(used[b + len - 1]) break;
+            joined += norm[b + len - 1];
+            if(joined === key) return {pos: a, idx: b, len: len};
+          }
+        }
+      }
+      return null;
+    }
+
+    var i, k;
+
+    // --- data ---
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var dateObj = new Date(today);
+    for(i = 0; i < count; i++){
+      if(norm[i] === "hoje"){ use(i); }
+      else if(norm[i] === "ontem"){ dateObj = new Date(today); dateObj.setDate(today.getDate() - 1); use(i); }
+      else if(norm[i] === "anteontem"){ dateObj = new Date(today); dateObj.setDate(today.getDate() - 2); use(i); }
+      else if(norm[i] === "dia"){
+        var dn = vNumberAt(norm, i + 1);
+        if(dn && dn.value >= 1 && dn.value <= 31 && Math.floor(dn.value) === dn.value){
+          var yy = today.getFullYear(), mm = today.getMonth();
+          if(dn.value > today.getDate()) mm -= 1;
+          var lastDay = new Date(yy, mm + 1, 0).getDate();
+          dateObj = new Date(yy, mm, Math.min(dn.value, lastDay));
+          use(i);
+          useRange(i + 1, dn.len);
+        }
+      }
+    }
+
+    // --- valor ---
+    var cands = [];
+    for(i = 0; i < count; i++){
+      if(used[i]) continue;
+      var na = vNumberAt(norm, i);
+      if(!na) continue;
+      var after = norm[i + na.len];
+      var hasCur = vHas(V_CURRENCY, after) || (i > 0 && norm[i - 1] === "r$");
+      cands.push({idx: i, len: na.len, value: na.value, isDigit: na.isDigit, hasCur: hasCur});
+      i += na.len - 1;
+    }
+    // "120 e 50" (sem dizer reais) vira 120,50
+    for(var x = 0; x < cands.length - 1; x++){
+      var ca = cands[x], cb = cands[x + 1];
+      if(ca.isDigit && cb.isDigit && !ca.hasCur && cb.idx === ca.idx + ca.len + 1 && norm[ca.idx + ca.len] === "e" && cb.value >= 10 && cb.value < 100){
+        ca.value = ca.value + cb.value / 100;
+        ca.len = cb.idx + cb.len - ca.idx;
+        ca.hasCur = cb.hasCur;
+        cands.splice(x + 1, 1);
+      }
+    }
+    var pick = null, c;
+    for(c = 0; c < cands.length; c++){ if(cands[c].hasCur){ pick = cands[c]; break; } }
+    if(!pick){
+      for(c = 0; c < cands.length; c++){
+        if(cands[c].isDigit && (!pick || cands[c].value > pick.value)) pick = cands[c];
+      }
+    }
+    if(!pick){ for(c = cands.length - 1; c >= 0; c--){ if(cands[c].value >= 10){ pick = cands[c]; break; } } }
+
+    var amount = 0;
+    if(pick){
+      amount = pick.value;
+      useRange(pick.idx, pick.len);
+      if(pick.idx > 0 && norm[pick.idx - 1] === "r$") use(pick.idx - 1);
+      var nextIdx = pick.idx + pick.len;
+      var hadCur = false;
+      if(vHas(V_CURRENCY, norm[nextIdx])){ use(nextIdx); nextIdx++; hadCur = true; }
+      if(norm[nextIdx] === "e"){
+        var cn = vNumberAt(norm, nextIdx + 1);
+        if(cn){
+          var afterC = norm[nextIdx + 1 + cn.len];
+          var isCents = afterC === "centavos" || afterC === "centavo";
+          if(isCents || (hadCur && cn.value < 100)){
+            amount += cn.value / 100;
+            use(nextIdx);
+            useRange(nextIdx + 1, cn.len);
+            if(isCents) use(nextIdx + 1 + cn.len);
+          }
+        }
+      }
+      amount = Math.round(amount * 100) / 100;
+    }
+
+    // --- tipo (entrada ou saída) ---
+    var inMark = {recebi:1, ganhei:1, vendi:1, receita:1, entrada:1, recebimento:1};
+    var inTrig = {salario:1, reembolso:1, estorno:1, cashback:1, rendimento:1, rendimentos:1, dividendo:1, dividendos:1};
+    var outMark = {gastei:1, paguei:1, comprei:1, gasto:1, despesa:1, saida:1, pago:1};
+    var isIn = false;
+    for(i = 0; i < count; i++){
+      if(used[i]) continue;
+      if(vHas(inMark, norm[i])){ isIn = true; use(i); }
+      else if(vHas(inTrig, norm[i])){ isIn = true; }
+      else if(vHas(outMark, norm[i])){ use(i); }
+    }
+    var type = isIn ? "in" : "out";
+
+    // --- cartão ---
+    var cardId = "";
+    var cardMatch = findName(cards.map(function(cd){ return cd.name; }));
+    if(cardMatch){
+      cardId = cards[cardMatch.pos].id;
+      useRange(cardMatch.idx, cardMatch.len);
+      useBefore(cardMatch.idx, ["no", "na", "cartao", "credito", "debito", "do", "da", "de", "pelo", "pela", "com", "usando"]);
+    }
+
+    // --- responsável ---
+    var person = "";
+    var personMatch = findName(people);
+    if(personMatch){
+      person = people[personMatch.pos];
+      useRange(personMatch.idx, personMatch.len);
+      useBefore(personMatch.idx, ["do", "da", "de", "pro", "pra", "para", "responsavel", "pelo", "pela"]);
+    }
+
+    // --- categoria ---
+    var category = "";
+    var catList = type === "in" ? categories.in : categories.out;
+    var catMatch = findName(catList);
+    if(catMatch){
+      category = catList[catMatch.pos];
+      useRange(catMatch.idx, catMatch.len);
+      useBefore(catMatch.idx, ["categoria", "de", "em", "na", "no", "para"]);
+    }
+
+    // --- descrição (o que sobrou) ---
+    var descTokens = [];
+    for(i = 0; i < count; i++){
+      if(!used[i] && orig[i]) descTokens.push(orig[i]);
+    }
+    function isStop(tok){ return vHas(V_STOP, vNorm(tok).replace(/^[^a-z0-9$]+|[^a-z0-9$]+$/g, "")); }
+    while(descTokens.length && isStop(descTokens[0])) descTokens.shift();
+    while(descTokens.length && isStop(descTokens[descTokens.length - 1])) descTokens.pop();
+    var description = descTokens.join(" ").replace(/[,.]+$/, "").trim();
+    if(!description) description = category || "Lançamento por voz";
+    description = description.charAt(0).toUpperCase() + description.slice(1);
+
+    // --- completar o que não foi dito, com base no histórico e no bom senso ---
+    var hist = findMatch(description);
+    if(!cardId && hist && hist.card && cards.some(function(cd){ return cd.id === hist.card; }) && hist.type === type) cardId = hist.card;
+    if(!category && hist && hist.type === type && catList.indexOf(hist.category) !== -1) category = hist.category;
+    if(!category) category = guessCategory(description, type);
+    if(!person){
+      var cardObj = cards.filter(function(cd){ return cd.id === cardId; })[0];
+      if(cardObj && cardObj.owner && people.indexOf(cardObj.owner) !== -1) person = cardObj.owner;
+      else if(hist && hist.person && people.indexOf(hist.person) !== -1) person = hist.person;
+      else person = people[0];
+    }
+
+    return {
+      type: type,
+      description: description,
+      amount: amount,
+      date: isoDate(dateObj),
+      category: category,
+      person: person,
+      card: cardId
+    };
+  }
+
+  function setVoiceUI(state, msg){
+    $("voiceMic").className = "voice-mic" + (state === "listening" ? " listening" : (state === "error" ? " error" : ""));
+    $("voiceStatus").textContent = state === "listening" ? "Ouvindo… fale agora" : (msg || "");
+    $("voiceStopBtn").hidden = state !== "listening";
+    $("voiceRetryBtn").hidden = !(state === "error" && SpeechRec);
+  }
+
+  function finishVoice(text){
+    voiceCancelled = true;
+    if(voiceDialog.open) voiceDialog.close();
+    var p = parseVoiceTransaction(text);
+    openForm(null);
+    setType(p.type);
+    txDesc.value = p.description;
+    txAmount.value = p.amount ? p.amount : "";
+    txDate.value = p.date;
+    if(p.category && (p.type === "in" ? categories.in : categories.out).indexOf(p.category) !== -1){
+      txCategory.value = p.category;
+    }
+    if(p.person && people.indexOf(p.person) !== -1) txPerson.value = p.person;
+    txCard.value = p.card || "";
+    applyCardDueAutofill();
+    autofillHint.hidden = false;
+    autofillHint.textContent = "Entendido por voz: “" + text + "”. Confira os campos e salve." + (p.amount ? "" : " Não identifiquei o valor.");
+    if(!p.amount) txAmount.focus();
+  }
+
+  function startVoice(){
+    if(!voiceDialog.open) voiceDialog.showModal();
+    if(!SpeechRec){
+      setVoiceUI("error", "Seu navegador não tem reconhecimento de voz. Tente no Chrome (Android ou computador) ou no Safari atualizado (iPhone).");
+      return;
+    }
+    voiceFinalText = "";
+    voiceInterimText = "";
+    voiceCancelled = false;
+    voiceErrored = false;
+    $("voiceTranscript").textContent = "";
+    setVoiceUI("listening");
+
+    voiceRec = new SpeechRec();
+    voiceRec.lang = "pt-BR";
+    voiceRec.interimResults = true;
+    voiceRec.continuous = false;
+    voiceRec.maxAlternatives = 1;
+
+    voiceRec.onresult = function(e){
+      var finalT = "", interim = "";
+      for(var r = 0; r < e.results.length; r++){
+        if(e.results[r].isFinal) finalT += e.results[r][0].transcript + " ";
+        else interim += e.results[r][0].transcript;
+      }
+      voiceFinalText = finalT.trim();
+      voiceInterimText = interim.trim();
+      $("voiceTranscript").textContent = (voiceFinalText + " " + voiceInterimText).trim();
+    };
+    voiceRec.onerror = function(e){
+      if(e.error === "aborted") return;
+      voiceErrored = true;
+      var msg = "Não consegui ouvir (" + e.error + "). Tente de novo.";
+      if(e.error === "not-allowed" || e.error === "service-not-allowed") msg = "O navegador bloqueou o microfone. Libere o microfone para este site nas configurações do navegador e tente de novo.";
+      else if(e.error === "no-speech") msg = "Não ouvi nada. Toque em “Tentar de novo” e fale perto do microfone.";
+      else if(e.error === "audio-capture") msg = "Não encontrei um microfone neste aparelho.";
+      else if(e.error === "network") msg = "O reconhecimento de voz precisa de internet. Verifique sua conexão.";
+      setVoiceUI("error", msg);
+    };
+    voiceRec.onend = function(){
+      if(voiceCancelled || voiceErrored) return;
+      var text = (voiceFinalText + " " + voiceInterimText).trim();
+      if(text) finishVoice(text);
+      else setVoiceUI("error", "Não ouvi nada. Toque em “Tentar de novo” e fale perto do microfone.");
+    };
+
+    try{
+      voiceRec.start();
+    }catch(err){
+      voiceErrored = true;
+      setVoiceUI("error", "Não consegui iniciar o microfone. Tente de novo.");
+    }
+  }
+
+  function cancelVoice(){
+    voiceCancelled = true;
+    try{ if(voiceRec) voiceRec.abort(); }catch(err){}
+    if(voiceDialog.open) voiceDialog.close();
+  }
+
+  $("voiceBtn").addEventListener("click", startVoice);
+  $("voiceCancelBtn").addEventListener("click", cancelVoice);
+  $("voiceRetryBtn").addEventListener("click", startVoice);
+  $("voiceStopBtn").addEventListener("click", function(){
+    try{ if(voiceRec) voiceRec.stop(); }catch(err){}
+  });
+  voiceDialog.addEventListener("cancel", function(){
+    voiceCancelled = true;
+    try{ if(voiceRec) voiceRec.abort(); }catch(err){}
   });
 
   // ---------- ordem responsiva (move os blocos de verdade, sem truque de CSS) ----------
