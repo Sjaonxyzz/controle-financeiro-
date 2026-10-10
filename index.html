@@ -4009,6 +4009,16 @@
   var voiceInterimText = "";
   var voiceCancelled = false;
   var voiceErrored = false;
+  var voiceStopRequested = false;
+  var voiceRestarts = 0;
+  var voiceSilenceTimer = null;
+  var voiceMaxTimer = null;
+  var voiceIsIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  function clearVoiceTimers(){
+    clearTimeout(voiceSilenceTimer);
+    clearTimeout(voiceMaxTimer);
+  }
 
   var V_UNITS = {zero:0, um:1, uma:1, dois:2, duas:2, tres:3, quatro:4, cinco:5, seis:6, sete:7, oito:8, nove:9, dez:10, onze:11, doze:12, treze:13, catorze:14, quatorze:14, quinze:15, dezesseis:16, dezessete:17, dezoito:18, dezenove:19};
   var V_TENS = {vinte:20, trinta:30, quarenta:40, cinquenta:50, sessenta:60, setenta:70, oitenta:80, noventa:90};
@@ -4244,13 +4254,16 @@
 
   function setVoiceUI(state, msg){
     $("voiceMic").className = "voice-mic" + (state === "listening" ? " listening" : (state === "error" ? " error" : ""));
-    $("voiceStatus").textContent = state === "listening" ? "Ouvindo… fale agora" : (msg || "");
+    $("voiceStatus").textContent = state === "listening"
+      ? (voiceIsIOS ? "Ouvindo… fale e toque em Concluir" : "Ouvindo… fale agora")
+      : (msg || "");
     $("voiceStopBtn").hidden = state !== "listening";
     $("voiceRetryBtn").hidden = !(state === "error" && SpeechRec);
   }
 
   function finishVoice(text){
     voiceCancelled = true;
+    clearVoiceTimers();
     if(voiceDialog.open) voiceDialog.close();
     var p = parseVoiceTransaction(text);
     openForm(null);
@@ -4279,14 +4292,26 @@
     voiceInterimText = "";
     voiceCancelled = false;
     voiceErrored = false;
+    voiceStopRequested = false;
+    voiceRestarts = 0;
+    clearVoiceTimers();
     $("voiceTranscript").textContent = "";
     setVoiceUI("listening");
 
     voiceRec = new SpeechRec();
     voiceRec.lang = "pt-BR";
     voiceRec.interimResults = true;
-    voiceRec.continuous = false;
+    // no iPhone o Safari encerra na primeira pausa; o modo contínuo mantém o microfone aberto
+    voiceRec.continuous = voiceIsIOS;
     voiceRec.maxAlternatives = 1;
+
+    if(voiceIsIOS){
+      // limite de segurança: encerra sozinho depois de 25 segundos
+      voiceMaxTimer = setTimeout(function(){
+        voiceStopRequested = true;
+        try{ voiceRec.stop(); }catch(err){}
+      }, 25000);
+    }
 
     voiceRec.onresult = function(e){
       var finalT = "", interim = "";
@@ -4297,12 +4322,21 @@
       voiceFinalText = finalT.trim();
       voiceInterimText = interim.trim();
       $("voiceTranscript").textContent = (voiceFinalText + " " + voiceInterimText).trim();
+      if(voiceIsIOS){
+        clearTimeout(voiceSilenceTimer);
+        voiceSilenceTimer = setTimeout(function(){
+          voiceStopRequested = true;
+          try{ voiceRec.stop(); }catch(err){}
+        }, 2200);
+      }
     };
     voiceRec.onerror = function(e){
       if(e.error === "aborted") return;
+      if(e.error === "no-speech" && voiceIsIOS && voiceRestarts < 2) return;
       voiceErrored = true;
+      clearVoiceTimers();
       var msg = "Não consegui ouvir (" + e.error + "). Tente de novo.";
-      if(e.error === "not-allowed" || e.error === "service-not-allowed") msg = "O navegador bloqueou o microfone. Libere o microfone para este site nas configurações do navegador e tente de novo.";
+      if(e.error === "not-allowed" || e.error === "service-not-allowed") msg = "O navegador bloqueou o microfone. Libere o microfone para este site nas configurações do navegador e tente de novo." + (voiceIsIOS ? " No iPhone, confira também em Ajustes > Geral > Teclado se o Ditado está ativado." : "");
       else if(e.error === "no-speech") msg = "Não ouvi nada. Toque em “Tentar de novo” e fale perto do microfone.";
       else if(e.error === "audio-capture") msg = "Não encontrei um microfone neste aparelho.";
       else if(e.error === "network") msg = "O reconhecimento de voz precisa de internet. Verifique sua conexão.";
@@ -4311,8 +4345,19 @@
     voiceRec.onend = function(){
       if(voiceCancelled || voiceErrored) return;
       var text = (voiceFinalText + " " + voiceInterimText).trim();
-      if(text) finishVoice(text);
-      else setVoiceUI("error", "Não ouvi nada. Toque em “Tentar de novo” e fale perto do microfone.");
+      if(text){
+        finishVoice(text);
+        return;
+      }
+      if(voiceIsIOS && !voiceStopRequested && voiceRestarts < 2){
+        voiceRestarts++;
+        try{
+          voiceRec.start();
+          return;
+        }catch(err){}
+      }
+      clearVoiceTimers();
+      setVoiceUI("error", "Não ouvi nada. Toque em “Tentar de novo” e fale perto do microfone.");
     };
 
     try{
@@ -4325,6 +4370,7 @@
 
   function cancelVoice(){
     voiceCancelled = true;
+    clearVoiceTimers();
     try{ if(voiceRec) voiceRec.abort(); }catch(err){}
     if(voiceDialog.open) voiceDialog.close();
   }
@@ -4333,10 +4379,12 @@
   $("voiceCancelBtn").addEventListener("click", cancelVoice);
   $("voiceRetryBtn").addEventListener("click", startVoice);
   $("voiceStopBtn").addEventListener("click", function(){
+    voiceStopRequested = true;
     try{ if(voiceRec) voiceRec.stop(); }catch(err){}
   });
   voiceDialog.addEventListener("cancel", function(){
     voiceCancelled = true;
+    clearVoiceTimers();
     try{ if(voiceRec) voiceRec.abort(); }catch(err){}
   });
 
