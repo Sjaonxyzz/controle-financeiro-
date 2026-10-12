@@ -515,6 +515,13 @@
     overflow-wrap:break-word;
   }
   .voice-tip{margin:0 0 6px;}
+  .voice-debug{
+    margin:14px 0 0;
+    font-size:10.5px;
+    line-height:1.4;
+    color:var(--muted);
+    overflow-wrap:break-word;
+  }
   @media (prefers-reduced-motion:reduce){
     .voice-mic.listening::after{animation:none;}
   }
@@ -1788,6 +1795,7 @@
       <button type="button" class="btn" id="voiceRetryBtn" hidden>Tentar de novo</button>
       <button type="button" class="btn btn-primary" id="voiceStopBtn">Concluir</button>
     </div>
+    <p class="voice-debug" id="voiceDebug"></p>
   </div>
 </dialog>
 
@@ -4252,6 +4260,16 @@
     };
   }
 
+  // diagnóstico: registra os eventos que o navegador informa (aparece numa linha pequena no diálogo)
+  var voiceLog = [];
+  var voiceT0 = 0;
+  var voiceGotAudio = false;
+  function vlog(ev){
+    voiceLog.push(ev + " " + Math.round(performance.now() - voiceT0) + "ms");
+    var el = $("voiceDebug");
+    if(el) el.textContent = "Diagnóstico: " + voiceLog.slice(-10).join(" › ");
+  }
+
   function setVoiceUI(state, msg){
     $("voiceMic").className = "voice-mic" + (state === "listening" ? " listening" : (state === "error" ? " error" : ""));
     $("voiceStatus").textContent = state === "listening"
@@ -4278,42 +4296,42 @@
     txCard.value = p.card || "";
     applyCardDueAutofill();
     autofillHint.hidden = false;
-    autofillHint.textContent = "Entendido por voz: “" + text + "”. Confira os campos e salve." + (p.amount ? "" : " Não identifiquei o valor.");
+    autofillHint.textContent = "Entendido: “" + text + "”. Confira os campos e salve." + (p.amount ? "" : " Não identifiquei o valor.");
     if(!p.amount) txAmount.focus();
   }
 
   function startVoice(){
-    if(!voiceDialog.open) voiceDialog.showModal();
-    if(!SpeechRec){
-      setVoiceUI("error", "Seu navegador não tem reconhecimento de voz. Tente no Chrome (Android ou computador) ou no Safari atualizado (iPhone).");
-      return;
-    }
     voiceFinalText = "";
     voiceInterimText = "";
     voiceCancelled = false;
     voiceErrored = false;
     voiceStopRequested = false;
-    voiceRestarts = 0;
+    voiceGotAudio = false;
     clearVoiceTimers();
+    voiceLog = [];
+    voiceT0 = performance.now();
     $("voiceTranscript").textContent = "";
-    setVoiceUI("listening");
+    $("voiceDebug").textContent = "";
 
-    voiceRec = new SpeechRec();
-    voiceRec.lang = "pt-BR";
-    voiceRec.interimResults = true;
-    // no iPhone o Safari encerra na primeira pausa; o modo contínuo mantém o microfone aberto
-    voiceRec.continuous = voiceIsIOS;
-    voiceRec.maxAlternatives = 1;
-
-    if(voiceIsIOS){
-      // limite de segurança: encerra sozinho depois de 25 segundos
-      voiceMaxTimer = setTimeout(function(){
-        voiceStopRequested = true;
-        try{ voiceRec.stop(); }catch(err){}
-      }, 25000);
+    if(!SpeechRec){
+      if(!voiceDialog.open) voiceDialog.showModal();
+      setVoiceUI("error", "Este navegador não tem reconhecimento de voz. Use o Chrome (Android ou computador) ou o Safari atualizado (iPhone).");
+      return;
     }
 
-    voiceRec.onresult = function(e){
+    // cada sessão é uma instância nova; eventos de instâncias antigas são ignorados
+    var rec = new SpeechRec();
+    voiceRec = rec;
+    rec.lang = "pt-BR";
+    rec.interimResults = true;
+    rec.continuous = voiceIsIOS;   // no iPhone, o modo contínuo evita o corte na primeira pausa
+    rec.maxAlternatives = 1;
+
+    rec.onstart = function(){ if(rec !== voiceRec) return; vlog("iniciou"); };
+    rec.onaudiostart = function(){ if(rec !== voiceRec) return; voiceGotAudio = true; vlog("microfone"); };
+    rec.onspeechstart = function(){ if(rec !== voiceRec) return; vlog("voz"); };
+    rec.onresult = function(e){
+      if(rec !== voiceRec) return;
       var finalT = "", interim = "";
       for(var r = 0; r < e.results.length; r++){
         if(e.results[r].isFinal) finalT += e.results[r][0].transcript + " ";
@@ -4322,50 +4340,69 @@
       voiceFinalText = finalT.trim();
       voiceInterimText = interim.trim();
       $("voiceTranscript").textContent = (voiceFinalText + " " + voiceInterimText).trim();
+      vlog("texto");
       if(voiceIsIOS){
+        // no iPhone: termina sozinho depois de ~2s de silêncio, já com texto
         clearTimeout(voiceSilenceTimer);
         voiceSilenceTimer = setTimeout(function(){
           voiceStopRequested = true;
-          try{ voiceRec.stop(); }catch(err){}
+          try{ rec.stop(); }catch(err){}
         }, 2200);
       }
     };
-    voiceRec.onerror = function(e){
+    rec.onerror = function(e){
+      if(rec !== voiceRec) return;
+      vlog("erro:" + e.error);
       if(e.error === "aborted") return;
-      if(e.error === "no-speech" && voiceIsIOS && voiceRestarts < 2) return;
       voiceErrored = true;
       clearVoiceTimers();
       var msg = "Não consegui ouvir (" + e.error + "). Tente de novo.";
-      if(e.error === "not-allowed" || e.error === "service-not-allowed") msg = "O navegador bloqueou o microfone. Libere o microfone para este site nas configurações do navegador e tente de novo." + (voiceIsIOS ? " No iPhone, confira também em Ajustes > Geral > Teclado se o Ditado está ativado." : "");
-      else if(e.error === "no-speech") msg = "Não ouvi nada. Toque em “Tentar de novo” e fale perto do microfone.";
+      if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+        msg = "O navegador bloqueou o microfone ou o reconhecimento de voz." + (voiceIsIOS
+          ? " No iPhone: toque em Permitir se aparecer o pedido, e confira em Ajustes > Siri e Pesquisa (Siri ativada) e Ajustes > Geral > Teclado (Ativar Ditado)."
+          : " Libere o microfone para este site nas configurações do navegador.");
+      }
+      else if(e.error === "no-speech") msg = "Não ouvi nada. Toque em “Tentar de novo” e fale logo depois de tocar.";
       else if(e.error === "audio-capture") msg = "Não encontrei um microfone neste aparelho.";
       else if(e.error === "network") msg = "O reconhecimento de voz precisa de internet. Verifique sua conexão.";
       setVoiceUI("error", msg);
     };
-    voiceRec.onend = function(){
+    rec.onend = function(){
+      if(rec !== voiceRec) return;
+      vlog("fim");
+      clearVoiceTimers();
       if(voiceCancelled || voiceErrored) return;
       var text = (voiceFinalText + " " + voiceInterimText).trim();
       if(text){
         finishVoice(text);
         return;
       }
-      if(voiceIsIOS && !voiceStopRequested && voiceRestarts < 2){
-        voiceRestarts++;
-        try{
-          voiceRec.start();
-          return;
-        }catch(err){}
-      }
-      clearVoiceTimers();
-      setVoiceUI("error", "Não ouvi nada. Toque em “Tentar de novo” e fale perto do microfone.");
+      setVoiceUI("error", voiceGotAudio
+        ? "Não consegui entender. Toque em “Tentar de novo” e fale logo depois de tocar."
+        : "O navegador fechou o microfone antes de captar áudio. Se apareceu um pedido de permissão, toque em Permitir e depois em “Tentar de novo”.");
     };
 
+    if(voiceIsIOS){
+      // limite de segurança: encerra sozinho depois de 25 segundos
+      voiceMaxTimer = setTimeout(function(){
+        voiceStopRequested = true;
+        try{ rec.stop(); }catch(err){}
+      }, 25000);
+    }
+
+    // start() precisa rodar dentro do toque do usuário; só depois abrimos o diálogo
+    vlog("start()");
     try{
-      voiceRec.start();
+      rec.start();
     }catch(err){
       voiceErrored = true;
+      vlog("falha:" + (err && err.name));
+      if(!voiceDialog.open) voiceDialog.showModal();
       setVoiceUI("error", "Não consegui iniciar o microfone. Tente de novo.");
+      return;
     }
+    if(!voiceDialog.open) voiceDialog.showModal();
+    setVoiceUI("listening");
   }
 
   function cancelVoice(){
@@ -4382,11 +4419,15 @@
     voiceStopRequested = true;
     try{ if(voiceRec) voiceRec.stop(); }catch(err){}
   });
-  voiceDialog.addEventListener("cancel", function(){
+  voiceDialog.addEventListener("cancel", function(e){
+    vlog("dialog-cancel");
+    if(voiceIsIOS){ e.preventDefault(); return; }   // no iPhone, só o botão Cancelar fecha
     voiceCancelled = true;
     clearVoiceTimers();
     try{ if(voiceRec) voiceRec.abort(); }catch(err){}
   });
+  window.addEventListener("blur", function(){ if(voiceDialog.open) vlog("janela-perdeu-foco"); });
+  document.addEventListener("visibilitychange", function(){ if(voiceDialog.open) vlog(document.hidden ? "aba-oculta" : "aba-visivel"); });
 
   // ---------- ordem responsiva (move os blocos de verdade, sem truque de CSS) ----------
   var MOBILE_ORDER = ["panelLancamentos", "panelSaldo", "panelResumoMes", "panelCartoes", "panelMetas", "panelCategoria", "panelResponsavel", "panelChart", "panelPaleta", "panelBackup"];
